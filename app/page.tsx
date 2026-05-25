@@ -32,7 +32,16 @@ export default function Home() {
     formData.append("file", file);
 
     try {
-      const response = await fetch("http://127.0.0.1:8000/api/analyze-food", {
+      // 🚀 1. 讀取環境變數中的後端基礎網址
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL;
+      
+      // 🚀 2. 動態拼接 API 路徑（如果環境變數不小心壞掉，預設回退到本地端，確保程式不崩潰）
+      const apiUrl = `${baseUrl || "http://127.0.0.1:8000"}/api/analyze-food`;
+      
+      console.log(`📡 賴皮貓正準備將照片發射至：${apiUrl}`);
+
+      // 🚀 3. 將原本寫死的網址換成 apiUrl 變數
+      const response = await fetch(apiUrl, {
         method: "POST",
         body: formData,
       });
@@ -41,7 +50,7 @@ export default function Home() {
         throw new Error(`後端伺服器抗議！狀態碼: ${response.status}`);
       }
 
-      const data: AnalysisResult = await response.json();
+      const data = await response.json();
       setResult(data);
     } catch (err: unknown) {
       console.error("❌ 串接失敗:", err);
