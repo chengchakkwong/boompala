@@ -4,21 +4,61 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { MealDetailView } from "@/components/MealDetailView";
-import { apiFetch, getApiBaseUrl } from "@/lib/api";
+import { apiFetch, apiFetchForm, getApiBaseUrl } from "@/lib/api";
+import {
+  analysisToVersion,
+  appendAssistantMessage,
+  appendUserMessage,
+  stripVersionMeta,
+  versionLabel,
+} from "@/lib/meal-session";
 import { createClient } from "@/lib/supabase/client";
-import type { AnalysisResult, Meal, MealCreatePayload } from "@/lib/types/meal";
+import type {
+  AnalysisResult,
+  AnalysisVersion,
+  ConversationMessage,
+  Meal,
+  MealCreatePayload,
+  RefineResponse,
+  UploadMode,
+} from "@/lib/types/meal";
+
+async function parseErrorResponse(response: Response): Promise<string> {
+  const text = await response.text();
+  try {
+    const json = JSON.parse(text) as { detail?: string };
+    if (typeof json.detail === "string") return json.detail;
+  } catch {
+    /* ignore */
+  }
+  return text || `請求失敗（${response.status}）`;
+}
 
 export default function Home() {
   const router = useRouter();
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [currentFile, setCurrentFile] = useState<File | null>(null);
+  const [uploadMode, setUploadMode] = useState<UploadMode>("default");
+  const [contextText, setContextText] = useState("");
   const [loading, setLoading] = useState(false);
+  const [refining, setRefining] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [result, setResult] = useState<AnalysisResult | null>(null);
+  const [versions, setVersions] = useState<AnalysisVersion[]>([]);
+  const [chosenVersionIndex, setChosenVersionIndex] = useState(0);
+  const [conversation, setConversation] = useState<ConversationMessage[]>([]);
+  const [chatInput, setChatInput] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [correctionNote, setCorrectionNote] = useState("");
+
+  const previewAnalysis: AnalysisResult | null =
+    versions.length > 0
+      ? stripVersionMeta(
+          versions.find((v) => v.version_index === chosenVersionIndex) ??
+            versions[versions.length - 1],
+        )
+      : null;
 
   useEffect(() => {
     const supabase = createClient();
@@ -33,32 +73,42 @@ export default function Home() {
     return () => subscription.unsubscribe();
   }, []);
 
-  const handleFoodAnalysis = async (file: File) => {
-    if (!file) return;
+  const resetSession = useCallback(() => {
+    setVersions([]);
+    setChosenVersionIndex(0);
+    setConversation([]);
+    setChatInput("");
+    setError(null);
+    setSaveError(null);
+    setSaveSuccess(false);
+  }, []);
 
+  const handleFoodAnalysis = async (file: File) => {
     setLoading(true);
     setError(null);
     setSaveError(null);
     setSaveSuccess(false);
-    setResult(null);
-    setCorrectionNote("");
+    resetSession();
 
     const formData = new FormData();
     formData.append("file", file);
+    if (uploadMode === "with_context" && contextText.trim()) {
+      formData.append("context_text", contextText.trim());
+    }
 
     try {
-      const apiUrl = `${getApiBaseUrl()}/api/analyze-food`;
-      const response = await fetch(apiUrl, {
+      const response = await fetch(`${getApiBaseUrl()}/api/analyze-food`, {
         method: "POST",
         body: formData,
       });
 
       if (!response.ok) {
-        throw new Error(`後端伺服器抗議！狀態碼: ${response.status}`);
+        throw new Error(await parseErrorResponse(response));
       }
 
       const data = (await response.json()) as AnalysisResult;
-      setResult(data);
+      setVersions([analysisToVersion(data, 0, "initial")]);
+      setChosenVersionIndex(0);
     } catch (err: unknown) {
       const message =
         err instanceof Error ? err.message : "發生未知錯誤，請檢查後端是否啟動";
@@ -71,6 +121,7 @@ export default function Home() {
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      setCurrentFile(file);
       const reader = new FileReader();
       reader.onloadend = () => {
         setImagePreview(reader.result as string);
@@ -80,16 +131,68 @@ export default function Home() {
     }
   };
 
+  const handleRefine = async () => {
+    if (!currentFile || !chatInput.trim() || versions.length === 0) return;
+
+    const message = chatInput.trim();
+    const nextIndex = versions.length;
+    const conversationWithUser = appendUserMessage(
+      conversation,
+      message,
+      nextIndex,
+    );
+
+    setRefining(true);
+    setError(null);
+    setChatInput("");
+
+    const formData = new FormData();
+    formData.append("file", currentFile);
+    formData.append("message", message);
+    formData.append("versions_json", JSON.stringify(versions));
+    formData.append("conversation_json", JSON.stringify(conversationWithUser));
+    if (uploadMode === "with_context" && contextText.trim()) {
+      formData.append("upload_context_text", contextText.trim());
+    }
+
+    try {
+      const data = await apiFetchForm<RefineResponse>(
+        "/api/analyze-food/refine",
+        formData,
+      );
+      const newVersion = analysisToVersion(
+        data.analysis,
+        data.version_index,
+        "chat_refine",
+      );
+      setVersions((prev) => [...prev, newVersion]);
+      setConversation(
+        appendAssistantMessage(conversationWithUser, data.analysis, data.version_index),
+      );
+      setChosenVersionIndex(data.version_index);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "修正失敗");
+      setChatInput(message);
+    } finally {
+      setRefining(false);
+    }
+  };
+
   const handleSaveToDiary = useCallback(async () => {
-    if (!result) return;
+    if (!previewAnalysis || versions.length === 0) return;
 
     setSaving(true);
     setSaveError(null);
     setSaveSuccess(false);
 
     const payload: MealCreatePayload = {
-      ...result,
-      user_correction_note: correctionNote.trim() || null,
+      ...previewAnalysis,
+      chosen_version_index: chosenVersionIndex,
+      upload_mode: uploadMode,
+      upload_context_text:
+        uploadMode === "with_context" ? contextText.trim() || null : null,
+      analysis_versions: versions,
+      conversation,
     };
 
     try {
@@ -104,7 +207,17 @@ export default function Home() {
     } finally {
       setSaving(false);
     }
-  }, [result, correctionNote, router]);
+  }, [
+    previewAnalysis,
+    versions,
+    chosenVersionIndex,
+    uploadMode,
+    contextText,
+    conversation,
+    router,
+  ]);
+
+  const hasResult = versions.length > 0 && previewAnalysis;
 
   return (
     <main className="flex-1 bg-slate-50 text-slate-900 p-4 md:p-8">
@@ -114,11 +227,58 @@ export default function Home() {
             AI-Native 健身飲食追蹤器
           </h1>
           <p className="text-slate-500 text-sm md:text-base">
-            上傳食物照片，AI 分析後由你確認才存入日記
+            上傳食物照片，可補充說明並與 AI 修正後再存入日記
           </p>
         </header>
 
         <hr className="border-slate-200" />
+
+        <div className="flex flex-wrap gap-2 justify-center">
+          <button
+            type="button"
+            onClick={() => setUploadMode("default")}
+            disabled={loading || refining}
+            className={`rounded-full px-4 py-1.5 text-sm font-medium transition ${
+              uploadMode === "default"
+                ? "bg-emerald-600 text-white"
+                : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-50"
+            }`}
+          >
+            預設（僅圖片）
+          </button>
+          <button
+            type="button"
+            onClick={() => setUploadMode("with_context")}
+            disabled={loading || refining}
+            className={`rounded-full px-4 py-1.5 text-sm font-medium transition ${
+              uploadMode === "with_context"
+                ? "bg-emerald-600 text-white"
+                : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-50"
+            }`}
+          >
+            補充說明
+          </button>
+        </div>
+
+        {uploadMode === "with_context" && (
+          <div className="max-w-2xl mx-auto">
+            <label
+              htmlFor="context-text"
+              className="block text-xs font-semibold text-slate-600 mb-1"
+            >
+              分析前補充（圖中看不到的品項、份量等）
+            </label>
+            <textarea
+              id="context-text"
+              rows={2}
+              value={contextText}
+              onChange={(e) => setContextText(e.target.value)}
+              disabled={loading || refining}
+              placeholder="例如：三哥酸辣薯粉加腩肉"
+              className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
+            />
+          </div>
+        )}
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center justify-center min-h-[350px]">
@@ -136,6 +296,7 @@ export default function Home() {
                     accept="image/*"
                     className="hidden"
                     onChange={handleImageChange}
+                    disabled={loading || refining}
                   />
                 </label>
               </div>
@@ -175,7 +336,7 @@ export default function Home() {
               </div>
             )}
 
-            {imagePreview && error && !loading && (
+            {imagePreview && error && !loading && !hasResult && (
               <div className="flex flex-col items-center justify-center h-full text-center space-y-3">
                 <span className="text-2xl">⚠️</span>
                 <p className="text-sm text-rose-600 font-medium">{error}</p>
@@ -185,24 +346,100 @@ export default function Home() {
               </div>
             )}
 
-            {imagePreview && result && !loading && (
+            {imagePreview && hasResult && !loading && previewAnalysis && (
               <div className="space-y-4">
-                <MealDetailView
-                  meal={result}
-                  showCorrectionField={isLoggedIn}
-                  correctionValue={correctionNote}
-                  onCorrectionChange={setCorrectionNote}
-                />
+                {error && (
+                  <p className="text-xs text-rose-600 text-center">{error}</p>
+                )}
+                {versions.length > 1 && (
+                  <div className="flex flex-wrap gap-2">
+                    {versions.map((v) => (
+                      <button
+                        key={v.version_index}
+                        type="button"
+                        onClick={() => setChosenVersionIndex(v.version_index)}
+                        className={`rounded-full px-3 py-1 text-xs font-medium transition ${
+                          chosenVersionIndex === v.version_index
+                            ? "bg-emerald-600 text-white"
+                            : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                        }`}
+                      >
+                        {versionLabel(v.version_index)}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                <MealDetailView meal={previewAnalysis} />
+
+                <div className="border-t border-slate-100 pt-3 space-y-2">
+                  <p className="text-xs font-semibold text-slate-600">與 AI 修正</p>
+                  {isLoggedIn ? (
+                    <>
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={chatInput}
+                          onChange={(e) => setChatInput(e.target.value)}
+                          disabled={refining || saving}
+                          placeholder="例如：這是三人份，但我們兩個人吃"
+                          className="flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" && !e.shiftKey) {
+                              e.preventDefault();
+                              void handleRefine();
+                            }
+                          }}
+                        />
+                        <button
+                          type="button"
+                          disabled={refining || saving || !chatInput.trim()}
+                          onClick={() => void handleRefine()}
+                          className="rounded-lg bg-slate-800 px-3 py-2 text-sm font-medium text-white hover:bg-slate-900 disabled:opacity-50"
+                        >
+                          {refining ? "…" : "送出"}
+                        </button>
+                      </div>
+                      {conversation.length > 0 && (
+                        <ul className="max-h-28 overflow-y-auto space-y-1 text-xs text-slate-500">
+                          {conversation.map((msg, i) => (
+                            <li
+                              key={i}
+                              className={
+                                msg.role === "user" ? "text-slate-700" : "text-slate-500"
+                              }
+                            >
+                              <span className="font-medium">
+                                {msg.role === "user" ? "你" : "貓"}：
+                              </span>{" "}
+                              {msg.content.slice(0, 80)}
+                              {msg.content.length > 80 ? "…" : ""}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </>
+                  ) : (
+                    <p className="text-xs text-slate-500">
+                      <Link href="/login" className="text-emerald-600 font-medium hover:underline">
+                        登入
+                      </Link>
+                      以解鎖與 AI 修正
+                    </p>
+                  )}
+                </div>
 
                 {isLoggedIn ? (
                   <div className="space-y-2 border-t border-slate-100 pt-4">
                     <button
                       type="button"
-                      disabled={saving || saveSuccess}
+                      disabled={saving || saveSuccess || refining}
                       onClick={() => void handleSaveToDiary()}
                       className="w-full rounded-xl bg-emerald-600 py-3 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50 transition"
                     >
-                      {saving ? "儲存中…" : "儲存到日記"}
+                      {saving
+                        ? "儲存中…"
+                        : `儲存到日記（${versionLabel(chosenVersionIndex)}）`}
                     </button>
                     {saveError && (
                       <p className="text-xs text-rose-600 text-center">{saveError}</p>

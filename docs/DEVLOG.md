@@ -123,10 +123,21 @@
 | P1.5-7 | 階段順序：**P1.5 在 P1 與 P2 之間**；P3 可用 `upload_context_text`／對話摘要作 `prior_correction` |
 | P1.5-8 | `REFINE_MAX_ROUNDS` 預設 **5**；僅登入可 refine |
 
+### 實作摘要
+
+- migration `002_meals_p15_interactive.sql`；`lib/meal-session.ts`、`apiFetchForm`。
+- 首頁：預設／補充模式、版本列、聊天 refine、存檔送 `analysis_versions` + `conversation`。
+- `/history/[id]`：採用版本、對話軸、其他版本摺疊；舊 `user_correction_note` 仍顯示。
+
 ### 狀態
 
-- **規格已定**（[PLAN-v1.md](PLAN-v1.md) §2.3、§4.1.1–4.1.2、§5.5、§6.3、§7 P1.5、§10 工單、§12 v1.4）。
-- **實作待開工**（migration `002`、API refine、首頁／詳情 UI）。
+- **P1.5 已驗收**（本機，2026-05-27）：補充說明 analyze、登入多輪 refine、N 選一存檔、詳情對話與版本、訪客鎖聊天、重整未存檔即丟，皆符合預期。
+- migration `002` 已於 Supabase SQL Editor 執行。
+- `REFINE_MAX_ROUNDS` 預設 **5**（版本總數含 v0）。
+
+### 下一步
+
+- 產品：**P2**（Storage 原圖）。
 
 ### 與 P2 / P3
 

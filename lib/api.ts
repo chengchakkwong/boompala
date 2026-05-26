@@ -63,3 +63,47 @@ export async function apiFetch<T>(
 
   return response.json() as Promise<T>;
 }
+
+type ApiFetchFormOptions = {
+  method?: string;
+  auth?: boolean;
+};
+
+export async function apiFetchForm<T>(
+  path: string,
+  formData: FormData,
+  options: ApiFetchFormOptions = {},
+): Promise<T> {
+  const { method = "POST", auth = true } = options;
+  const headers: Record<string, string> = {};
+
+  if (auth) {
+    const token = await getAccessToken();
+    if (!token) {
+      throw new Error("請先登入");
+    }
+    headers.Authorization = `Bearer ${token}`;
+  }
+
+  const response = await fetch(`${getApiBaseUrl()}${path}`, {
+    method,
+    headers,
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    let detail = text;
+    try {
+      const json = JSON.parse(text) as { detail?: string };
+      if (typeof json.detail === "string") {
+        detail = json.detail;
+      }
+    } catch {
+      /* use raw text */
+    }
+    throw new Error(detail || `請求失敗（${response.status}）`);
+  }
+
+  return response.json() as Promise<T>;
+}

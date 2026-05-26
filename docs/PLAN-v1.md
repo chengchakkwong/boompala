@@ -1,7 +1,7 @@
 # Project CheekyCat — 產品與技術計劃書 v1.1
 
-> **狀態**：**P1 已驗收**；**P1.5 規格已定**（互動修正，待實作）；P0 Google OAuth（見 §12、[DEVLOG.md](DEVLOG.md)）  
-> **最後更新**：2026-05-26  
+> **狀態**：**P1、P1.5 已驗收**；P0 Google OAuth（見 §12、[DEVLOG.md](DEVLOG.md)）  
+> **最後更新**：2026-05-27  
 > **相關 repo**：前端 `健身App`（Vercel）｜後端 `健身AppBackend`（Cloud Run FastAPI）
 
 ---
@@ -471,25 +471,25 @@ stateDiagram-v2
 
 ---
 
-### P1.5 — 互動修正（約 2–3 天）
+### P1.5 — 互動修正（約 2–3 天）✅ 已驗收
 
 **任務**
 
 - [x] 更新 PLAN / DEVLOG（本規格）
-- [ ] migration：`002_meals_p15_interactive.sql`
-- [ ] `POST /api/analyze-food` 支援 `context_text`（Form + File）
-- [ ] `POST /api/analyze-food/refine`（登入、`REFINE_MAX_ROUNDS`）
-- [ ] `POST /api/meals`、`GET /api/meals/{id}` 擴充 P1.5 欄位
-- [ ] 首頁：雙模式、版本列、聊天、訪客鎖；移除「修正備註」主流程
-- [ ] `/history/[id]`：採用版本 + 對話 + 可選其他版本預覽
+- [x] migration：`002_meals_p15_interactive.sql`
+- [x] `POST /api/analyze-food` 支援 `context_text`（Form + File）
+- [x] `POST /api/analyze-food/refine`（登入、`REFINE_MAX_ROUNDS`）
+- [x] `POST /api/meals`、`GET /api/meals/{id}` 擴充 P1.5 欄位
+- [x] 首頁：雙模式、版本列、聊天、訪客鎖；移除「修正備註」主流程
+- [x] `/history/[id]`：採用版本 + 對話 + 可選其他版本預覽
 
 **驗收**
 
-- [ ] 補充模式：帶「三哥酸辣薯粉加腩肉」等文字 → v0 受 context 影響
-- [ ] 登入：聊天兩輪 → v0/v1/v2 可切換；存 v2 後詳情顯示對話 +「採用 v2」
-- [ ] 訪客：可補充 analyze；聊天僅提示登入；無存檔
-- [ ] 重整未存檔：進行中分析消失
-- [ ] 舊 P1 僅 `user_correction_note` 的列：詳情仍可讀
+- [x] 補充模式：帶「三哥酸辣薯粉加腩肉」等文字 → v0 受 context 影響
+- [x] 登入：聊天兩輪 → v0/v1/v2 可切換；存 v2 後詳情顯示對話 +「採用 v2」
+- [x] 訪客：可補充 analyze；聊天僅提示登入；無存檔
+- [x] 重整未存檔：進行中分析消失
+- [x] 舊 P1 僅 `user_correction_note` 的列：詳情仍可讀
 
 ---
 
@@ -642,3 +642,4 @@ stateDiagram-v2
 | v1.2 | 2026-05-26 | **P0 已驗收**：Google OAuth、JWKS/ES256 驗簽、`GET /api/meals` 200/401；詳見 [DEVLOG.md](DEVLOG.md) |
 | v1.3 | 2026-05-26 | **P1 已驗收**：`meals` 表、確認後存檔、`/history`、service_role 寫庫；詳見 [DEVLOG.md](DEVLOG.md) |
 | v1.4 | 2026-05-26 | **P1.5 規格定稿**（互動修正：雙模式、聊天多版本、詳情對話）；待實作；詳見 [DEVLOG.md](DEVLOG.md) |
+| v1.5 | 2026-05-27 | **P1.5 已驗收**：migration 002、refine API、首頁互動 session、詳情對話／版本；詳見 [DEVLOG.md](DEVLOG.md) |

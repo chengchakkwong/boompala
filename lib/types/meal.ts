@@ -10,16 +10,45 @@ export interface AnalysisResult {
   cheeky_cat_comment: string;
 }
 
+export type UploadMode = "default" | "with_context";
+export type VersionSource = "initial" | "chat_refine";
+
+export interface AnalysisVersion extends AnalysisResult {
+  version_index: number;
+  source: VersionSource;
+}
+
+export interface ConversationMessage {
+  role: "user" | "assistant";
+  content: string;
+  version_index: number;
+  cheeky_cat_comment?: string;
+}
+
 export interface Meal extends AnalysisResult {
   id: string;
   user_id: string;
   created_at: string;
   user_correction_note: string | null;
+  upload_mode?: UploadMode;
+  upload_context_text?: string | null;
+  chosen_version_index?: number;
+  analysis_versions?: AnalysisVersion[];
+  conversation?: ConversationMessage[];
   analysis_source: string;
   reused_from_meal_id: string | null;
   image_path: string | null;
 }
 
 export type MealCreatePayload = AnalysisResult & {
-  user_correction_note?: string | null;
+  chosen_version_index: number;
+  upload_mode: UploadMode;
+  upload_context_text: string | null;
+  analysis_versions: AnalysisVersion[];
+  conversation: ConversationMessage[];
 };
+
+export interface RefineResponse {
+  version_index: number;
+  analysis: AnalysisResult;
+}

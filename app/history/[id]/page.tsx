@@ -5,8 +5,9 @@ import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { MealDetailView } from "@/components/MealDetailView";
 import { apiFetch } from "@/lib/api";
+import { chosenVersionLabel, stripVersionMeta, versionLabel } from "@/lib/meal-session";
 import { createClient } from "@/lib/supabase/client";
-import type { Meal } from "@/lib/types/meal";
+import type { AnalysisVersion, Meal } from "@/lib/types/meal";
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleString("zh-TW", {
@@ -69,6 +70,11 @@ export default function MealDetailPage() {
     }
   }, [mealId, router]);
 
+  const versions = meal?.analysis_versions ?? [];
+  const hasP15 = versions.length > 0;
+  const chosenIndex = meal?.chosen_version_index ?? 0;
+  const otherVersions = versions.filter((v) => v.version_index !== chosenIndex);
+
   return (
     <main className="flex-1 bg-slate-50 text-slate-900 p-4 md:p-8">
       <div className="max-w-2xl mx-auto space-y-6">
@@ -96,8 +102,74 @@ export default function MealDetailPage() {
 
         {meal && !loading && (
           <div className="bg-white rounded-2xl border border-slate-100 p-6 shadow-sm space-y-6">
-            <p className="text-xs text-slate-400">儲存於 {formatDate(meal.created_at)}</p>
-            <MealDetailView meal={meal} correctionNote={meal.user_correction_note} />
+            <div className="space-y-1">
+              <p className="text-xs text-slate-400">儲存於 {formatDate(meal.created_at)}</p>
+              {hasP15 && (
+                <p className="text-sm font-semibold text-emerald-700">
+                  採用：{chosenVersionLabel(chosenIndex)}
+                </p>
+              )}
+              {meal.upload_mode === "with_context" && meal.upload_context_text && (
+                <p className="text-xs text-slate-500">
+                  分析前補充：{meal.upload_context_text}
+                </p>
+              )}
+            </div>
+
+            <MealDetailView
+              meal={meal}
+              correctionNote={!hasP15 ? meal.user_correction_note : undefined}
+            />
+
+            {hasP15 && (meal.conversation?.length ?? 0) > 0 && (
+              <div className="border-t border-slate-100 pt-4 space-y-3">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                  修正對話
+                </h3>
+                <ul className="space-y-3">
+                  {meal.conversation!.map((msg, i) => (
+                    <li
+                      key={i}
+                      className={`rounded-lg p-3 text-sm ${
+                        msg.role === "user"
+                          ? "bg-emerald-50 text-slate-800 ml-4"
+                          : "bg-slate-50 text-slate-600 mr-4"
+                      }`}
+                    >
+                      <p className="text-xs font-semibold text-slate-500 mb-1">
+                        {msg.role === "user" ? "你" : "CheekyCat"}
+                        {msg.version_index > 0 && msg.role === "assistant"
+                          ? ` · ${versionLabel(msg.version_index)}`
+                          : ""}
+                      </p>
+                      <p>{msg.content}</p>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {hasP15 && otherVersions.length > 0 && (
+              <details className="border-t border-slate-100 pt-4">
+                <summary className="text-xs font-semibold text-slate-600 cursor-pointer">
+                  其他版本（只讀）
+                </summary>
+                <div className="mt-4 space-y-6">
+                  {otherVersions.map((v: AnalysisVersion) => (
+                    <div
+                      key={v.version_index}
+                      className="rounded-xl border border-slate-100 p-4 bg-slate-50/50"
+                    >
+                      <p className="text-xs font-semibold text-slate-500 mb-3">
+                        {versionLabel(v.version_index)}
+                      </p>
+                      <MealDetailView meal={stripVersionMeta(v)} />
+                    </div>
+                  ))}
+                </div>
+              </details>
+            )}
+
             <div className="border-t border-slate-100 pt-4">
               <button
                 type="button"
