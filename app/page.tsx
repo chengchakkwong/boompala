@@ -80,7 +80,7 @@ export default function Home() {
     macroTotal > 0 ? Math.round((grams / macroTotal) * 100) : 0;
 
   return (
-    <main className="min-h-screen bg-slate-50 text-slate-900 p-4 md:p-8">
+    <main className="flex-1 bg-slate-50 text-slate-900 p-4 md:p-8">
       <div className="max-w-4xl mx-auto space-y-6">
         <header className="text-center space-y-2">
           <h1 className="text-3xl font-extrabold tracking-tight text-emerald-600 md:text-4xl">
