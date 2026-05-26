@@ -91,7 +91,14 @@ export default function HistoryPage() {
                 className="block bg-white rounded-xl border border-slate-100 p-4 shadow-sm hover:border-emerald-200 transition"
               >
                 <div className="flex justify-between items-start gap-3">
-                  <div className="min-w-0">
+                  {meal.image_url && (
+                    <img
+                      src={meal.image_url}
+                      alt=""
+                      className="h-16 w-16 rounded-lg object-cover shrink-0 bg-slate-100"
+                    />
+                  )}
+                  <div className="min-w-0 flex-1">
                     <h2 className="font-semibold text-slate-800 truncate">
                       {meal.dish_name}
                     </h2>

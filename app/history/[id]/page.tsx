@@ -102,6 +102,14 @@ export default function MealDetailPage() {
 
         {meal && !loading && (
           <div className="bg-white rounded-2xl border border-slate-100 p-6 shadow-sm space-y-6">
+            {meal.image_url && (
+              <img
+                src={meal.image_url}
+                alt={meal.dish_name}
+                className="w-full max-h-72 rounded-xl object-cover bg-slate-100"
+              />
+            )}
+
             <div className="space-y-1">
               <p className="text-xs text-slate-400">儲存於 {formatDate(meal.created_at)}</p>
               {hasP15 && (

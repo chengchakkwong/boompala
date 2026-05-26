@@ -38,6 +38,7 @@ export interface Meal extends AnalysisResult {
   analysis_source: string;
   reused_from_meal_id: string | null;
   image_path: string | null;
+  image_url: string | null;
 }
 
 export type MealCreatePayload = AnalysisResult & {

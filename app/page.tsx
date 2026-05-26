@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { MealDetailView } from "@/components/MealDetailView";
-import { apiFetch, apiFetchForm, getApiBaseUrl } from "@/lib/api";
+import { apiFetchForm, getApiBaseUrl } from "@/lib/api";
 import {
   analysisToVersion,
   appendAssistantMessage,
@@ -180,6 +180,10 @@ export default function Home() {
 
   const handleSaveToDiary = useCallback(async () => {
     if (!previewAnalysis || versions.length === 0) return;
+    if (!currentFile) {
+      setSaveError("找不到照片，請重新選擇圖片");
+      return;
+    }
 
     setSaving(true);
     setSaveError(null);
@@ -195,11 +199,12 @@ export default function Home() {
       conversation,
     };
 
+    const formData = new FormData();
+    formData.append("file", currentFile);
+    formData.append("meal_json", JSON.stringify(payload));
+
     try {
-      const meal = await apiFetch<Meal>("/api/meals", {
-        method: "POST",
-        body: payload,
-      });
+      const meal = await apiFetchForm<Meal>("/api/meals", formData);
       setSaveSuccess(true);
       router.push(`/history/${meal.id}`);
     } catch (err: unknown) {
@@ -214,6 +219,7 @@ export default function Home() {
     uploadMode,
     contextText,
     conversation,
+    currentFile,
     router,
   ]);
 
