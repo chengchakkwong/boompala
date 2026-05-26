@@ -96,7 +96,39 @@
 
 - `PyJWT>=2.10.1`（與 `supabase` / `supabase-auth` 相容；見後端 `requirements.txt`）。
 
-### 下一步
+### 下一步（當時）
 
 - 正式環境：Cloud Run 設 `SUPABASE_SERVICE_ROLE_KEY` 並重新部署後端。  
-- 產品：**P2**（Storage 原圖）。
+- 產品：**P1.5** 規格 → 實作 → **P2**（Storage 原圖）。
+
+---
+
+## 2026-05-26 — P1.5 互動修正（規格定稿）
+
+### 為何要做（相對 P1）
+
+- P1 的 `user_correction_note` **只存文字、不參與 Gemini**，無法修正熱量／份量，實務上幾乎沒用。
+- 需求：分析前補充圖中看不到的資訊；分析後可 **多輪對話** 讓 AI 重算；使用者 **N 選一** 版本再存檔；歷史可回看 **採用版本 + 對話**。
+
+### 決策（P1.5-1～8）
+
+| # | 決策 |
+|---|------|
+| P1.5-1 | 主流程改為 **上傳補充 + 聊天修正 + 版本選擇**；`user_correction_note` **deprecated**（舊列詳情仍顯示） |
+| P1.5-2 | 上傳模式：**預設**（僅圖）／**補充說明**（圖 + `context_text`） |
+| P1.5-3 | **訪客**：可補充模式 analyze；**不可** refine；UI「登入以解鎖與 AI 修正」 |
+| P1.5-4 | **登入者**：每則聊天 → 新版完整 `NutritionalAnalysis`；UI **N 選一** 後存檔 |
+| P1.5-5 | 存檔前 session：**僅前端記憶體**；重整即丟；不建 `analysis_sessions` 表 |
+| P1.5-6 | **歷史詳情**：顯示採用 vN + 完整對話；可選只讀其他版本 |
+| P1.5-7 | 階段順序：**P1.5 在 P1 與 P2 之間**；P3 可用 `upload_context_text`／對話摘要作 `prior_correction` |
+| P1.5-8 | `REFINE_MAX_ROUNDS` 預設 **5**；僅登入可 refine |
+
+### 狀態
+
+- **規格已定**（[PLAN-v1.md](PLAN-v1.md) §2.3、§4.1.1–4.1.2、§5.5、§6.3、§7 P1.5、§10 工單、§12 v1.4）。
+- **實作待開工**（migration `002`、API refine、首頁／詳情 UI）。
+
+### 與 P2 / P3
+
+- **P2**：存檔時上傳原圖；P1.5 refine 仍每次帶同一張 `file`，不依賴 Storage。
+- **P3**：相似餐重算時可注入歷史補充與對話摘要。
