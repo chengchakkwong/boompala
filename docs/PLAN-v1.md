@@ -1,6 +1,6 @@
 # Project CheekyCat — 產品與技術計劃書 v1.1
 
-> **狀態**：**P1、P1.5 已驗收**；P0 Google OAuth（見 §12、[DEVLOG.md](DEVLOG.md)）  
+> **狀態**：**P1、P1.5、P2 已驗收**；P0 Google OAuth（見 §12、[DEVLOG.md](DEVLOG.md)）  
 > **最後更新**：2026-05-27  
 > **相關 repo**：前端 `健身App`（Vercel）｜後端 `健身AppBackend`（Cloud Run FastAPI）
 
@@ -497,15 +497,15 @@ stateDiagram-v2
 
 **任務**
 
-- [ ] Storage bucket private
-- [ ] `POST /api/meals` 接受圖片並上傳
-- [ ] 列表／詳情 signed URL 顯示縮圖
-- [ ] `DELETE` 連動刪物件
+- [x] Storage bucket private（`meal-photos`）
+- [x] `POST /api/meals` multipart 接受圖片並上傳（JPEG）
+- [x] 列表／詳情 signed URL 顯示縮圖（CSS `object-cover`）
+- [x] `DELETE` 連動刪 Storage 物件
 
 **驗收**
 
-- [ ] 歷史可看到當初拍的照片
-- [ ] 刪除紀錄後 Storage 無殘留（或排程清理）
+- [x] 歷史可看到當初拍的照片
+- [x] 刪除紀錄後 Storage 無殘留（失敗時後端 log，仍刪 DB）
 
 ---
 
@@ -643,3 +643,4 @@ stateDiagram-v2
 | v1.3 | 2026-05-26 | **P1 已驗收**：`meals` 表、確認後存檔、`/history`、service_role 寫庫；詳見 [DEVLOG.md](DEVLOG.md) |
 | v1.4 | 2026-05-26 | **P1.5 規格定稿**（互動修正：雙模式、聊天多版本、詳情對話）；待實作；詳見 [DEVLOG.md](DEVLOG.md) |
 | v1.5 | 2026-05-27 | **P1.5 已驗收**：migration 002、refine API、首頁互動 session、詳情對話／版本；詳見 [DEVLOG.md](DEVLOG.md) |
+| v1.6 | 2026-05-27 | **P2 已驗收**：`meal-photos` Storage、multipart 存檔、signed URL、`/history` 顯示原圖；詳見 [DEVLOG.md](DEVLOG.md) |

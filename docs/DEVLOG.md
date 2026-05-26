@@ -143,3 +143,41 @@
 
 - **P2**：存檔時上傳原圖；P1.5 refine 仍每次帶同一張 `file`，不依賴 Storage。
 - **P3**：相似餐重算時可注入歷史補充與對話摘要。
+
+---
+
+## 2026-05-27 — P2 原圖雲端（已驗收）
+
+### 決策（P2）
+
+| # | 決策 |
+|---|------|
+| P2-1 | Bucket **`meal-photos`**（private）；僅後端 **service role** 上傳／刪除／簽 URL |
+| P2-2 | `POST /api/meals`：**multipart**（`file` + `meal_json`）；與 analyze／refine 一致 |
+| P2-3 | 路徑 `{user_id}/{meal_id}.jpg`；存檔前轉 **JPEG**（Pillow，長邊 2048、品質 85） |
+| P2-4 | 讀圖：FastAPI 簽 **signed URL** → 回應 `image_url`（預設 1 小時） |
+| P2-5 | 列表縮圖：**CSS `object-cover`**（不另存 thumb） |
+| P2-6 | 上傳失敗 **rollback**（刪 Storage 殘檔 + 刪 DB 列）；刪除日記先刪 Storage（失敗 log，仍刪 DB） |
+| P2-7 | 舊列 `image_path` 為 null：不顯示照片（僅文字） |
+
+### 實作摘要
+
+- **Supabase**：Dashboard 建立 private bucket `meal-photos`；說明見 `supabase/migrations/003_meal_photos_storage.md`。
+- **後端**：`main.py` multipart 存檔、Storage CRUD、GET 附 `image_url`；`Pillow`；`.env.example` P2 變數。
+- **前端**：存檔 `apiFetchForm` + `currentFile`；`/history` 縮圖、`/history/[id]` 大圖；`Meal.image_url`。
+
+### 驗收（本機 + 正式，2026-05-27）
+
+1. 登入 → 分析 → 儲存 → 列表與詳情可見當初照片  
+2. 刪除該筆 → 日記消失；Storage 對應物件已刪  
+3. P1／P1.5 無圖舊列：仍可讀，不顯示圖片區  
+
+### 踩坑：multipart 與 JSON 不一致
+
+- **現象**：`{"detail":[{"loc":["body","file"],"msg":"Field required"},...]}`  
+- **原因**：後端已改 multipart，前端仍送 JSON（未部署／快取舊 bundle）。  
+- **處理**：重啟 dev、硬重新整理；**前後端一起部署**。
+
+### 下一步
+
+- 產品：**P3**（embedding、30 天相似圖、沿用／重算）。
