@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { SignOutButton } from "@/components/SignOutButton";
-import { MealsApiProbe } from "@/components/MealsApiProbe";
 
 export async function AuthHeader() {
   const supabase = await createClient();
@@ -19,10 +18,15 @@ export async function AuthHeader() {
         <div className="flex flex-wrap items-center gap-3 text-sm">
           {user ? (
             <>
-              <span className="text-slate-600 truncate max-w-[200px]">
-                已登入：{user.email ?? user.id.slice(0, 8)}
+              <Link
+                href="/history"
+                className="text-slate-600 hover:text-emerald-600 font-medium transition"
+              >
+                日記
+              </Link>
+              <span className="text-slate-600 truncate max-w-[200px] hidden sm:inline">
+                {user.email ?? user.id.slice(0, 8)}
               </span>
-              <MealsApiProbe />
               <SignOutButton />
             </>
           ) : (

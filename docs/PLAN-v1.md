@@ -1,6 +1,6 @@
 # Project CheekyCat — 產品與技術計劃書 v1.1
 
-> **狀態**：**P0 已驗收**；v1.1 登入為 Google OAuth（見 §12、[DEVLOG.md](DEVLOG.md)）  
+> **狀態**：**P1 已驗收**（日記 MVP）；P0 Google OAuth（見 §12、[DEVLOG.md](DEVLOG.md)）  
 > **最後更新**：2026-05-26  
 > **相關 repo**：前端 `健身App`（Vercel）｜後端 `健身AppBackend`（Cloud Run FastAPI）
 
@@ -322,23 +322,23 @@ FastAPI 驗證方式（實作時二選一）：
 
 ---
 
-### P1 — 日記 MVP（約 3–4 天）
+### P1 — 日記 MVP（約 3–4 天）✅ 已驗收
 
 **任務**
 
-- [ ] migration：`meals` 表 + RLS
-- [ ] `POST /api/meals`、`GET` 列表、`GET` 詳情、`DELETE`
-- [ ] 首頁：analyze → 顯示 → 確認 → 存檔（**不自動存**）
-- [ ] `user_correction_note` 欄位與表單
-- [ ] `/history` 時間軸、`/history/[id]` 詳情與刪除
-- [ ] 訪客：關閉分頁丟棄（僅 in-memory state）
+- [x] migration：`meals` 表 + RLS + `GRANT service_role`
+- [x] `POST /api/meals`、`GET` 列表、`GET` 詳情、`DELETE`
+- [x] 首頁：analyze → 顯示 → 確認 → 存檔（**不自動存**）
+- [x] `user_correction_note` 欄位與表單
+- [x] `/history` 時間軸、`/history/[id]` 詳情與刪除
+- [x] 訪客：關閉分頁丟棄（僅 in-memory state）
 
 **驗收**
 
-- [ ] 手機登入存一筆，電腦登入同一帳號看得到
-- [ ] 訪客分析不出現在任何人歷史
-- [ ] 刪除後列表與詳情皆不可見
-- [ ] 未按「儲存」的不出現在時間軸
+- [x] 手機登入存一筆，電腦登入同一帳號看得到（本機驗收通過）
+- [x] 訪客分析不出現在任何人歷史
+- [x] 刪除後列表與詳情皆不可見
+- [x] 未按「儲存」的不出現在時間軸
 
 ---
 
@@ -474,3 +474,4 @@ FastAPI 驗證方式（實作時二選一）：
 | v1.0 | 2026-05-26 | 定稿：含訪客關閉丟棄、先 embedding 再 Gemini、RLS 預留公開 |
 | v1.1 | 2026-05-26 | P0 登入改為僅 **Google OAuth**（原 Email+密碼見 §2.1 刪除線）；詳見 [DEVLOG.md](DEVLOG.md) |
 | v1.2 | 2026-05-26 | **P0 已驗收**：Google OAuth、JWKS/ES256 驗簽、`GET /api/meals` 200/401；詳見 [DEVLOG.md](DEVLOG.md) |
+| v1.3 | 2026-05-26 | **P1 已驗收**：`meals` 表、確認後存檔、`/history`、service_role 寫庫；詳見 [DEVLOG.md](DEVLOG.md) |
