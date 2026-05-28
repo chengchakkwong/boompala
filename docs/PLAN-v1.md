@@ -625,6 +625,7 @@ stateDiagram-v2
 
 | 資源 | 路徑 |
 |------|------|
+| 驗收／發版文檔清單 | `docs/RELEASE-CHECKLIST.md` |
 | 開發日誌（決策原因） | `docs/DEVLOG.md` |
 | 前端首頁 | `app/page.tsx` |
 | 後端 API | `C:\Users\user\Desktop\健身AppBackend\main.py` |
