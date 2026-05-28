@@ -1,7 +1,7 @@
 # Project CheekyCat — 產品與技術計劃書 v1.2
 
-> **狀態**：**P0–P2 已驗收**（含 P1.5）；**P3 已擱置**；**P4.5 已實作、待部署驗收**；**P4**（每日熱量加總等）仍為並列下一步（見 §7）  
-> **最後更新**：2026-05-29 · P4.5 見 [DEVLOG.md](DEVLOG.md) §2026-05-29 — P4.5；P3 擱置見同檔 §2026-05-29 — P3  
+> **狀態**：**P0–P2、P1.5、P4.5 已驗收**（本機）；**P3 已擱置**；**0.7.1 自動存日記** 已驗收（本機）；**待正式部署** Cloud Run + Vercel；**P4** 仍為並列下一步（見 §7）  
+> **最後更新**：2026-05-29 · 自動存見 [DEVLOG.md](DEVLOG.md) §2026-05-29 — 自動存日記；P4.5 見同檔 §2026-05-29 — P4.5  
 > **相關 repo**：前端 `健身App`（Vercel）｜後端 `健身AppBackend`（Cloud Run FastAPI）
 
 ---
@@ -46,7 +46,7 @@
 
 | # | 決策 |
 |---|------|
-| 存檔時機 | **非上傳即存** → 先顯示 AI 結果（可多版本）→ 使用者 **選定版本後** 才「儲存到日記」 |
+| 存檔時機 | 登入者 **分析成功即 POST**（v0）；refine／切版以 **PATCH** 同步；採用版預設最新，可點版本列改回初版等（見 §6.3） |
 | 上傳模式（P1.5） | **預設**：僅圖片。**補充說明**：圖片 + `context_text`（分析前注入 prompt，補充圖中不可見資訊，如品項／配料） |
 | AI 猜錯（P1.5 主流程） | **登入者**：分析後可 **與 AI 聊天修正**，每則訊息產生新版完整營養 JSON（v0, v1, v2…），UI **N 選一** 再存檔；詳情保留 **採用版本** + **對話紀錄** |
 | 存檔前 session（P1.5） | **僅前端記憶體**；重整／關分頁未存檔即丟失；**不建** `analysis_sessions` 暫存表 |
@@ -325,7 +325,8 @@ CREATE POLICY "meals_delete_own" ON meals FOR DELETE USING (auth.uid() = user_id
 | `GET` | `/api/me/preferences` | **必填** | P4.5：`{ "feedback_persona_id": "cheeky" }`；無列則後端 lazy insert 預設 |
 | `PATCH` | `/api/me/preferences` | **必填** | P4.5：body `{ "feedback_persona_id": "cheeky" \| "supportive" }` |
 | `POST` | `/api/meals/check-similar` | **必填** | P3：上傳圖片 → embedding → 30 天比對 |
-| `POST` | `/api/meals` | **必填** | 確認存檔：P1.5 欄位 + **`feedback_persona_id`**（必填）；P2 multipart 含原圖 |
+| `POST` | `/api/meals` | **必填** | 建立日記：P1.5 欄位 + **`feedback_persona_id`**（必填）；P2 multipart 含原圖；登入者分析成功後自動呼叫 |
+| `PATCH` | `/api/meals/{id}` | **必填** | 更新同一筆：選中版營養快照 + `analysis_versions` + `conversation` + `chosen_version_index`（JSON body） |
 | `GET` | `/api/meals` | **必填** | 時間軸 `?limit=&offset=`（列表用頂層營養快照即可） |
 | `GET` | `/api/meals/{id}` | **必填** | 詳情含 versions + conversation + `chosen_version_index`；非本人 → **404** |
 | `DELETE` | `/api/meals/{id}` | **必填** | 刪除列 + P2 刪 Storage 物件 |
@@ -462,22 +463,23 @@ stateDiagram-v2
   [*] --> ChooseMode
   ChooseMode --> Analyzing: select_image
   Analyzing --> ShowV0: analyze_ok
+  ShowV0 --> AutoSaved: logged_in_POST_meals
+  AutoSaved --> ShowVn: send_chat
   ShowV0 --> ShowVn: logged_in_send_chat
   ShowV0 --> GuestLoginHint: guest_tap_chat
   GuestLoginHint --> ShowV0
-  ShowVn --> ShowVn: more_chat
-  ShowV0 --> SavePrompt: pick_version
-  ShowVn --> SavePrompt: pick_version
-  SavePrompt --> Saved: POST_meals
+  ShowVn --> Patched: PATCH_meals
+  Patched --> ShowVn: more_chat
+  ShowV0 --> Patched: pick_version
+  ShowVn --> Patched: pick_version
 ```
 
 **登入者**
 
 1. 切換 **預設** / **補充說明**；後者顯示 `context_text` textarea。  
-2. `POST /api/analyze-food` → **v0**；版本列顯示「初版 (v0)」。  
-3. 聊天：輸入修正 → `POST /api/analyze-food/refine` → 新增 **vN**，預設選最新。  
-4. 點版本列切換預覽（N 選一）。  
-5. 「儲存到日記」→ `POST /api/meals`（選中版營養 + metadata）。
+2. `POST /api/analyze-food` → **v0**；**自動** `POST /api/meals`（v0），留首頁不跳轉。  
+3. 聊天：輸入修正 → `POST /api/analyze-food/refine` → 新增 **vN**，預設選最新 → **PATCH** 同步。  
+4. 版本列（`versions > 1` 時顯示）：點選 → 預覽並 **PATCH** 更新採用版。
 
 **訪客**：步驟 1–2；無步驟 3–5（見 §6.2）。
 
@@ -590,7 +592,7 @@ stateDiagram-v2
 
 ---
 
-### P4.5 — 雙性格 Feedback（插隊實作）【已實作、待部署驗收】
+### P4.5 — 雙性格 Feedback（插隊實作）✅ 已驗收（本機）
 
 > 決策與 prompt 要點：[DEVLOG.md](DEVLOG.md) §2026-05-29 — P4.5。Migration：`003_feedback_persona.sql`。
 
@@ -604,10 +606,26 @@ stateDiagram-v2
 
 **驗收**
 
-- [ ] 兩種性格評語風格可辨、supportive 不羞辱、cheeky 有護欄
-- [ ] 訪客 localStorage、登入偏好跨裝置
-- [ ] 切換清空 + 提示；loading 不可切
-- [ ] `meals.feedback_persona_id` 快照正確
+- [x] 兩種性格評語風格可辨、supportive 不羞辱、cheeky 有護欄
+- [x] 訪客 localStorage、登入偏好跨裝置
+- [x] 切換清空 + 提示；loading 不可切
+- [x] `meals.feedback_persona_id` 快照正確
+
+---
+
+### P1.5+ — 自動存日記（0.7.1）✅ 已驗收（本機）
+
+**任務**
+
+- [x] 後端 `PATCH /api/meals/{id}`
+- [x] 前端分析後自動 POST；refine／切版 PATCH；移除「儲存到日記」
+- [x] `content/changelog.ts` **0.7.1**
+
+**驗收**
+
+- [x] 登入分析後歷史即有紀錄；refine 後採用版為最新
+- [x] 點初版／修正 N 可改採用版；失敗可重試；不跳轉詳情
+- [x] 訪客仍不寫庫
 
 ---
 
@@ -730,3 +748,5 @@ stateDiagram-v2
 | v1.6 | 2026-05-27 | **P2 已驗收**：`meal-photos` Storage、multipart 存檔、signed URL、`/history` 顯示原圖；詳見 [DEVLOG.md](DEVLOG.md) |
 | v1.7 | 2026-05-29 | **P3 已擱置**（相似圖／embedding 暫不實作，規格保留）；**下一步 P4**；詳見 [DEVLOG.md](DEVLOG.md) §2026-05-29 |
 | v1.8 | 2026-05-29 | **P4.5 規格定稿**（雙性格 feedback、`user_preferences`、migration 003）；待實作；與 P4 並列；詳見 [DEVLOG.md](DEVLOG.md) §2026-05-29 — P4.5 |
+| v1.9 | 2026-05-29 | **P4.5 已驗收**（本機）：教練風格、migration 003、`0.7.0` changelog；詳見 [DEVLOG.md](DEVLOG.md) §2026-05-29 — P4.5 |
+| v1.10 | 2026-05-29 | **自動存日記已驗收**（本機）：`PATCH /api/meals/{id}`、首頁自動 POST/PATCH、`0.7.1` changelog；詳見 [DEVLOG.md](DEVLOG.md) §2026-05-29 — 自動存日記 |

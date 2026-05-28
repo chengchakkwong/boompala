@@ -2,8 +2,38 @@ import type {
   AnalysisResult,
   AnalysisVersion,
   ConversationMessage,
+  FeedbackPersonaId,
+  MealCreatePayload,
+  UploadMode,
   VersionSource,
 } from "@/lib/types/meal";
+
+export function deriveUploadMode(context: string): UploadMode {
+  return context.trim() ? "with_context" : "default";
+}
+
+export function buildMealCreatePayload(
+  versions: AnalysisVersion[],
+  chosenVersionIndex: number,
+  conversation: ConversationMessage[],
+  contextText: string,
+  personaId: FeedbackPersonaId,
+): MealCreatePayload {
+  const chosen =
+    versions.find((v) => v.version_index === chosenVersionIndex) ??
+    versions[versions.length - 1];
+  const analysis = stripVersionMeta(chosen);
+  const trimmedContext = contextText.trim();
+  return {
+    ...analysis,
+    chosen_version_index: chosenVersionIndex,
+    upload_mode: deriveUploadMode(contextText),
+    upload_context_text: trimmedContext || null,
+    analysis_versions: versions,
+    conversation,
+    feedback_persona_id: personaId,
+  };
+}
 
 export function analysisToVersion(
   analysis: AnalysisResult,

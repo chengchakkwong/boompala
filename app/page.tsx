@@ -1,10 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { MealDetailView } from "@/components/MealDetailView";
 import { apiFetchForm, fetchPreferences, getApiBaseUrl, updatePreferences } from "@/lib/api";
+import { createMealInDiary, updateMealInDiary } from "@/lib/meal-persist";
 import {
   DEFAULT_PERSONA_ID,
   PERSONA_OPTIONS,
@@ -25,11 +25,9 @@ import type {
   AnalysisResult,
   AnalysisVersion,
   ConversationMessage,
-  Meal,
-  MealCreatePayload,
   RefineResponse,
-  UploadMode,
 } from "@/lib/types/meal";
+import type { PersistMealData } from "@/lib/meal-persist";
 
 async function parseErrorResponse(response: Response): Promise<string> {
   const text = await response.text();
@@ -42,25 +40,21 @@ async function parseErrorResponse(response: Response): Promise<string> {
   return text || `請求失敗（${response.status}）`;
 }
 
-function deriveUploadMode(context: string): UploadMode {
-  return context.trim() ? "with_context" : "default";
-}
-
 export default function Home() {
-  const router = useRouter();
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [currentFile, setCurrentFile] = useState<File | null>(null);
   const [contextText, setContextText] = useState("");
   const [loading, setLoading] = useState(false);
   const [refining, setRefining] = useState(false);
-  const [saving, setSaving] = useState(false);
+  const [persisting, setPersisting] = useState(false);
+  const [savedMealId, setSavedMealId] = useState<string | null>(null);
+  const savedMealIdRef = useRef<string | null>(null);
+  const [persistError, setPersistError] = useState<string | null>(null);
   const [versions, setVersions] = useState<AnalysisVersion[]>([]);
   const [chosenVersionIndex, setChosenVersionIndex] = useState(0);
   const [conversation, setConversation] = useState<ConversationMessage[]>([]);
   const [chatInput, setChatInput] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [saveError, setSaveError] = useState<string | null>(null);
-  const [saveSuccess, setSaveSuccess] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [personaId, setPersonaId] = useState<FeedbackPersonaId>(DEFAULT_PERSONA_ID);
   const [personaSwitchNotice, setPersonaSwitchNotice] = useState<string | null>(
@@ -106,15 +100,70 @@ export default function Home() {
     return () => subscription.unsubscribe();
   }, []);
 
+  const setSavedMeal = useCallback((mealId: string | null) => {
+    savedMealIdRef.current = mealId;
+    setSavedMealId(mealId);
+  }, []);
+
   const resetSession = useCallback(() => {
     setVersions([]);
     setChosenVersionIndex(0);
     setConversation([]);
     setChatInput("");
     setError(null);
-    setSaveError(null);
-    setSaveSuccess(false);
-  }, []);
+    setPersistError(null);
+    setSavedMeal(null);
+  }, [setSavedMeal]);
+
+  const syncMealToDiary = useCallback(
+    async (data: PersistMealData, file: File | null) => {
+      if (!isLoggedIn) return;
+
+      setPersisting(true);
+      setPersistError(null);
+
+      try {
+        const mealId = savedMealIdRef.current;
+        if (mealId) {
+          await updateMealInDiary(mealId, data);
+        } else {
+          if (!file) {
+            setPersistError("找不到照片，請重新選擇圖片");
+            return;
+          }
+          const meal = await createMealInDiary(file, data);
+          setSavedMeal(meal.id);
+        }
+      } catch (err: unknown) {
+        setPersistError(err instanceof Error ? err.message : "同步日記失敗");
+      } finally {
+        setPersisting(false);
+      }
+    },
+    [isLoggedIn, setSavedMeal],
+  );
+
+  const retryPersist = useCallback(() => {
+    if (versions.length === 0) return;
+    void syncMealToDiary(
+      {
+        versions,
+        chosenVersionIndex,
+        conversation,
+        contextText,
+        personaId,
+      },
+      currentFile,
+    );
+  }, [
+    versions,
+    chosenVersionIndex,
+    conversation,
+    contextText,
+    personaId,
+    currentFile,
+    syncMealToDiary,
+  ]);
 
   const handlePersonaChange = useCallback(
     (next: FeedbackPersonaId) => {
@@ -137,8 +186,6 @@ export default function Home() {
   const handleFoodAnalysis = async (file: File) => {
     setLoading(true);
     setError(null);
-    setSaveError(null);
-    setSaveSuccess(false);
     setPersonaSwitchNotice(null);
     resetSession();
 
@@ -172,8 +219,22 @@ export default function Home() {
       }
 
       const data = (await response.json()) as AnalysisResult;
-      setVersions([analysisToVersion(data, 0, "initial")]);
+      const initialVersions = [analysisToVersion(data, 0, "initial")];
+      setVersions(initialVersions);
       setChosenVersionIndex(0);
+
+      if (isLoggedIn) {
+        await syncMealToDiary(
+          {
+            versions: initialVersions,
+            chosenVersionIndex: 0,
+            conversation: [],
+            contextText,
+            personaId,
+          },
+          file,
+        );
+      }
     } catch (err: unknown) {
       const message =
         err instanceof Error ? err.message : "發生未知錯誤，請檢查後端是否啟動";
@@ -237,11 +298,28 @@ export default function Home() {
         data.version_index,
         "chat_refine",
       );
-      setVersions((prev) => [...prev, newVersion]);
-      setConversation(
-        appendAssistantMessage(conversationWithUser, data.analysis, data.version_index),
+      const nextVersions = [...versions, newVersion];
+      const nextConversation = appendAssistantMessage(
+        conversationWithUser,
+        data.analysis,
+        data.version_index,
       );
+      setVersions(nextVersions);
+      setConversation(nextConversation);
       setChosenVersionIndex(data.version_index);
+
+      if (isLoggedIn) {
+        await syncMealToDiary(
+          {
+            versions: nextVersions,
+            chosenVersionIndex: data.version_index,
+            conversation: nextConversation,
+            contextText,
+            personaId,
+          },
+          currentFile,
+        );
+      }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "修正失敗");
       setChatInput(message);
@@ -250,55 +328,24 @@ export default function Home() {
     }
   };
 
-  const handleSaveToDiary = useCallback(async () => {
-    if (!previewAnalysis || versions.length === 0) return;
-    if (!currentFile) {
-      setSaveError("找不到照片，請重新選擇圖片");
-      return;
-    }
-
-    setSaving(true);
-    setSaveError(null);
-    setSaveSuccess(false);
-
-    const trimmedContext = contextText.trim();
-    const payload: MealCreatePayload = {
-      ...previewAnalysis,
-      chosen_version_index: chosenVersionIndex,
-      upload_mode: deriveUploadMode(contextText),
-      upload_context_text: trimmedContext || null,
-      analysis_versions: versions,
-      conversation,
-      feedback_persona_id: personaId,
-    };
-
-    const formData = new FormData();
-    formData.append("file", currentFile);
-    formData.append("meal_json", JSON.stringify(payload));
-
-    try {
-      const meal = await apiFetchForm<Meal>("/api/meals", formData);
-      setSaveSuccess(true);
-      router.push(`/history/${meal.id}`);
-    } catch (err: unknown) {
-      setSaveError(err instanceof Error ? err.message : "儲存失敗");
-    } finally {
-      setSaving(false);
-    }
-  }, [
-    previewAnalysis,
-    versions,
-    chosenVersionIndex,
-    contextText,
-    conversation,
-    currentFile,
-    personaId,
-    router,
-  ]);
+  const handleChooseVersion = (versionIndex: number) => {
+    setChosenVersionIndex(versionIndex);
+    if (!isLoggedIn || versions.length === 0) return;
+    void syncMealToDiary(
+      {
+        versions,
+        chosenVersionIndex: versionIndex,
+        conversation,
+        contextText,
+        personaId,
+      },
+      currentFile,
+    );
+  };
 
   const hasResult = versions.length > 0 && previewAnalysis;
   const canSubmitAnalysis = !!currentFile && !loading && !refining;
-  const inputLocked = loading || refining || saving;
+  const inputLocked = loading || refining || persisting;
 
   return (
     <main className="flex-1 bg-slate-50 text-slate-900 p-4 md:p-8">
@@ -459,7 +506,8 @@ export default function Home() {
                       <button
                         key={v.version_index}
                         type="button"
-                        onClick={() => setChosenVersionIndex(v.version_index)}
+                        onClick={() => handleChooseVersion(v.version_index)}
+                        disabled={persisting}
                         className={`rounded-full px-3 py-1 text-xs font-medium transition ${
                           chosenVersionIndex === v.version_index
                             ? "bg-emerald-600 text-white"
@@ -483,7 +531,7 @@ export default function Home() {
                           type="text"
                           value={chatInput}
                           onChange={(e) => setChatInput(e.target.value)}
-                          disabled={refining || saving}
+                          disabled={refining || persisting}
                           placeholder="例如：這是三人份，但我們兩個人吃"
                           className="flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
                           onKeyDown={(e) => {
@@ -495,7 +543,7 @@ export default function Home() {
                         />
                         <button
                           type="button"
-                          disabled={refining || saving || !chatInput.trim()}
+                          disabled={refining || persisting || !chatInput.trim()}
                           onClick={() => void handleRefine()}
                           className="rounded-lg bg-slate-800 px-3 py-2 text-sm font-medium text-white hover:bg-slate-900 disabled:opacity-50"
                         >
@@ -532,19 +580,33 @@ export default function Home() {
                 </div>
 
                 {isLoggedIn ? (
-                  <div className="space-y-2 border-t border-slate-100 pt-4">
-                    <button
-                      type="button"
-                      disabled={saving || saveSuccess || refining}
-                      onClick={() => void handleSaveToDiary()}
-                      className="w-full rounded-xl bg-emerald-600 py-3 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50 transition"
-                    >
-                      {saving
-                        ? "儲存中…"
-                        : `儲存到日記（${versionLabel(chosenVersionIndex)}）`}
-                    </button>
-                    {saveError && (
-                      <p className="text-xs text-rose-600 text-center">{saveError}</p>
+                  <div className="space-y-2 border-t border-slate-100 pt-4 text-center">
+                    {persisting && (
+                      <p className="text-xs text-slate-500">同步至日記中…</p>
+                    )}
+                    {!persisting && savedMealId && !persistError && (
+                      <p className="text-xs text-emerald-700">
+                        已自動存入日記
+                        <Link
+                          href={`/history/${savedMealId}`}
+                          className="ml-1 font-medium underline hover:text-emerald-800"
+                        >
+                          查看
+                        </Link>
+                      </p>
+                    )}
+                    {persistError && (
+                      <div className="space-y-2">
+                        <p className="text-xs text-rose-600">{persistError}</p>
+                        <button
+                          type="button"
+                          onClick={retryPersist}
+                          disabled={persisting}
+                          className="text-xs font-medium text-emerald-600 hover:underline disabled:opacity-50"
+                        >
+                          重試同步
+                        </button>
+                      </div>
                     )}
                   </div>
                 ) : (

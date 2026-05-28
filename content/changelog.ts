@@ -8,6 +8,16 @@ export type ChangelogEntry = {
 /** 新 → 舊；版號規則見 docs/CHANGELOG-POLICY.md */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.7.1",
+    date: "2026-05-29",
+    title: "分析後自動存入日記",
+    highlights: [
+      "登入後完成分析即自動建立日記，無需再按儲存",
+      "聊天修正後會同步最新版本；可點版本鈕改採初版或其他修正",
+      "留在首頁繼續修正，可從連結查看已存入的紀錄",
+    ],
+  },
+  {
     version: "0.7.0",
     date: "2026-05-29",
     title: "可選教練風格",

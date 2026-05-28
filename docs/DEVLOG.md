@@ -5,7 +5,33 @@
 **驗收／發版請對照**：[RELEASE-CHECKLIST.md](./RELEASE-CHECKLIST.md)  
 **用戶更新日誌（版號 0.x）**：[CHANGELOG-POLICY.md](./CHANGELOG-POLICY.md) · App `/changelog`
 
-> **最新**：P4.5 雙性格 feedback 規格已定（待實作）→ 本章 [§2026-05-29 — P4.5](#2026-05-29--p45-雙性格-feedback教練風格)
+> **最新**：首頁分析後自動存日記（`PATCH /api/meals/{id}`）→ 本章 [§2026-05-29 — 自動存日記](#2026-05-29--自動存日記)
+
+---
+
+## 2026-05-29 — 自動存日記
+
+### 決策
+
+- 登入者分析成功後 **POST** 建立日記（v0），不再顯示「儲存到日記」按鈕。
+- refine 或切換版本時 **PATCH** 同一筆；採用版預設跟最新修正，使用者可點版本鈕改回初版等。
+- 存檔後 **不跳轉** 詳情，可從「查看」連結進入。
+
+### 技術
+
+- 後端：`PATCH /api/meals/{meal_id}`，body 同 `MealCreateP15`（JSON）。
+- 前端：`lib/meal-persist.ts`、`buildMealCreatePayload`；`savedMealIdRef` 避免競態。
+
+### 驗收（本機，2026-05-29）
+
+- [x] 登入分析後歷史即有 v0，無「儲存到日記」按鈕
+- [x] refine 後採用版為最新；點初版可改回 v0
+- [x] 同步失敗可重試；存檔後留首頁、「查看」可進詳情
+- [x] 訪客仍不寫庫
+
+### 狀態
+
+- **本機已驗收**；待與 P4.5 一併部署 Cloud Run → Vercel。
 
 ---
 
@@ -247,7 +273,7 @@
 | D11 | Migration | `supabase/migrations/003_feedback_persona.sql`；由維護者在 **Supabase Dashboard → SQL Editor** 手動 Run |
 | D12 | 後端 repo | `C:\Users\user\Desktop\健身AppBackend`（`personalities.py` + 擴充 `main.py`） |
 | D13 | 與 P4 關係 | **並列**：P4（每日熱量加總等）仍為規格下一步；**P4.5 插隊實作**（使用者體驗優先） |
-| D14 | 用戶 changelog | 功能上線後新增 **0.7.0**（見 [CHANGELOG-POLICY.md](./CHANGELOG-POLICY.md)）；**規格階段不**改 `content/changelog.ts` |
+| D14 | 用戶 changelog | **0.7.0**、**0.7.1** 已寫入 `content/changelog.ts`（見 [CHANGELOG-POLICY.md](./CHANGELOG-POLICY.md)） |
 
 ### `supportive` 人設（寫入 prompt，非通用聊天）
 
@@ -264,30 +290,29 @@
 - 高熱量／炸物：**至少一句**緩和或明日可執行小建議。
 - 同樣 ≤120 字、針對**本餐**。
 
-### 技術摘要（待實作）
+### 技術摘要
 
 - 後端：`build_analyze_prompt` / `build_refine_prompt` 接受 `persona_id`；`GET/PATCH /api/me/preferences`；analyze／refine／meals 帶 persona。
 - 前端：首頁 segmented、`persona_id` 進 FormData、存檔帶 `feedback_persona_id`。
 - 實作細節見 Cursor plan：`.cursor/plans/教練性格_feedback_3603e796.plan.md`（若檔名不同，以 repo 內最新 P4.5 plan 為準）。
 
-### 驗收（草案）
+### 驗收（本機，2026-05-29）
 
-- [ ] `supportive`：高熱量餐有安慰、無羞辱、≤120 字
-- [ ] `cheeky`：仍毒舌但有緩和／建議
-- [ ] 訪客選 `supportive` 重開分頁仍記得（localStorage）
-- [ ] 登入改偏好、重登仍保留；切換時 PATCH 成功
-- [ ] 有 v0 時切換性格 → 清空 + 提示文案；loading 時不可切
-- [ ] 存檔後 `meals.feedback_persona_id` 正確；舊列 NULL 詳情正常
-- [ ] Dashboard 已執行 migration 003
-- [ ] 上線後 `content/changelog.ts` 新增 0.7.0
+- [x] `supportive`：高熱量餐有安慰、無羞辱、≤120 字
+- [x] `cheeky`：仍毒舌但有緩和／建議
+- [x] 訪客選 `supportive` 重開分頁仍記得（localStorage）
+- [x] 登入改偏好、重登仍保留；切換時 PATCH 成功
+- [x] 有 v0 時切換性格 → 清空 + 提示文案；loading 時不可切
+- [x] 存檔後 `meals.feedback_persona_id` 正確；舊列 NULL 詳情正常
+- [x] Dashboard 已執行 migration 003
+- [x] `content/changelog.ts` 已新增 0.7.0
 
-### 部署順序（實作時）
+### 部署順序
 
-1. Dashboard 執行 `003_feedback_persona.sql`
-2. 部署 `健身AppBackend`（Cloud Run）
+1. Dashboard 執行 `003_feedback_persona.sql`（若正式環境尚未執行）
+2. 部署 `健身AppBackend`（Cloud Run，含 `PATCH /api/meals/{id}`）
 3. 部署前端（Vercel）
 
 ### 狀態
 
-- **程式已實作**（前端 `健身App`、後端 `健身AppBackend`）；migration 003 已由維護者在 Dashboard 執行。
-- **待部署**：Cloud Run（後端）→ Vercel（前端）；本機可先用 `uvicorn` + `npm run dev` 驗收。
+- **本機已驗收**（含與 0.7.1 自動存併測）；**待正式部署** Cloud Run → Vercel。
