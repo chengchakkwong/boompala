@@ -34,11 +34,14 @@ async function parseErrorResponse(response: Response): Promise<string> {
   return text || `請求失敗（${response.status}）`;
 }
 
+function deriveUploadMode(context: string): UploadMode {
+  return context.trim() ? "with_context" : "default";
+}
+
 export default function Home() {
   const router = useRouter();
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [currentFile, setCurrentFile] = useState<File | null>(null);
-  const [uploadMode, setUploadMode] = useState<UploadMode>("default");
   const [contextText, setContextText] = useState("");
   const [loading, setLoading] = useState(false);
   const [refining, setRefining] = useState(false);
@@ -90,10 +93,11 @@ export default function Home() {
     setSaveSuccess(false);
     resetSession();
 
+    const trimmedContext = contextText.trim();
     const formData = new FormData();
     formData.append("file", file);
-    if (uploadMode === "with_context" && contextText.trim()) {
-      formData.append("context_text", contextText.trim());
+    if (trimmedContext) {
+      formData.append("context_text", trimmedContext);
     }
 
     try {
@@ -121,14 +125,19 @@ export default function Home() {
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      resetSession();
       setCurrentFile(file);
       const reader = new FileReader();
       reader.onloadend = () => {
         setImagePreview(reader.result as string);
       };
       reader.readAsDataURL(file);
-      void handleFoodAnalysis(file);
     }
+  };
+
+  const handleSubmitAnalysis = () => {
+    if (!currentFile || loading) return;
+    void handleFoodAnalysis(currentFile);
   };
 
   const handleRefine = async () => {
@@ -151,8 +160,9 @@ export default function Home() {
     formData.append("message", message);
     formData.append("versions_json", JSON.stringify(versions));
     formData.append("conversation_json", JSON.stringify(conversationWithUser));
-    if (uploadMode === "with_context" && contextText.trim()) {
-      formData.append("upload_context_text", contextText.trim());
+    const trimmedContext = contextText.trim();
+    if (trimmedContext) {
+      formData.append("upload_context_text", trimmedContext);
     }
 
     try {
@@ -189,12 +199,12 @@ export default function Home() {
     setSaveError(null);
     setSaveSuccess(false);
 
+    const trimmedContext = contextText.trim();
     const payload: MealCreatePayload = {
       ...previewAnalysis,
       chosen_version_index: chosenVersionIndex,
-      upload_mode: uploadMode,
-      upload_context_text:
-        uploadMode === "with_context" ? contextText.trim() || null : null,
+      upload_mode: deriveUploadMode(contextText),
+      upload_context_text: trimmedContext || null,
       analysis_versions: versions,
       conversation,
     };
@@ -216,7 +226,6 @@ export default function Home() {
     previewAnalysis,
     versions,
     chosenVersionIndex,
-    uploadMode,
     contextText,
     conversation,
     currentFile,
@@ -224,6 +233,8 @@ export default function Home() {
   ]);
 
   const hasResult = versions.length > 0 && previewAnalysis;
+  const canSubmitAnalysis = !!currentFile && !loading && !refining;
+  const inputLocked = loading || refining || saving;
 
   return (
     <main className="flex-1 bg-slate-50 text-slate-900 p-4 md:p-8">
@@ -233,63 +244,16 @@ export default function Home() {
             AI-Native 健身飲食追蹤器
           </h1>
           <p className="text-slate-500 text-sm md:text-base">
-            上傳食物照片，可補充說明並與 AI 修正後再存入日記
+            上傳照片後可選填補充，按「開始分析」再交由 AI 估算營養
           </p>
         </header>
 
         <hr className="border-slate-200" />
 
-        <div className="flex flex-wrap gap-2 justify-center">
-          <button
-            type="button"
-            onClick={() => setUploadMode("default")}
-            disabled={loading || refining}
-            className={`rounded-full px-4 py-1.5 text-sm font-medium transition ${
-              uploadMode === "default"
-                ? "bg-emerald-600 text-white"
-                : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-50"
-            }`}
-          >
-            預設（僅圖片）
-          </button>
-          <button
-            type="button"
-            onClick={() => setUploadMode("with_context")}
-            disabled={loading || refining}
-            className={`rounded-full px-4 py-1.5 text-sm font-medium transition ${
-              uploadMode === "with_context"
-                ? "bg-emerald-600 text-white"
-                : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-50"
-            }`}
-          >
-            補充說明
-          </button>
-        </div>
-
-        {uploadMode === "with_context" && (
-          <div className="max-w-2xl mx-auto">
-            <label
-              htmlFor="context-text"
-              className="block text-xs font-semibold text-slate-600 mb-1"
-            >
-              分析前補充（圖中看不到的品項、份量等）
-            </label>
-            <textarea
-              id="context-text"
-              rows={2}
-              value={contextText}
-              onChange={(e) => setContextText(e.target.value)}
-              disabled={loading || refining}
-              placeholder="例如：三哥酸辣薯粉加腩肉"
-              className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
-            />
-          </div>
-        )}
-
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center justify-center min-h-[350px]">
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col min-h-[350px]">
             {imagePreview ? (
-              <div className="w-full space-y-4">
+              <div className="w-full flex flex-col gap-4 flex-1">
                 <img
                   src={imagePreview}
                   alt="Food preview"
@@ -302,9 +266,40 @@ export default function Home() {
                     accept="image/*"
                     className="hidden"
                     onChange={handleImageChange}
-                    disabled={loading || refining}
+                    disabled={inputLocked}
                   />
                 </label>
+
+                <div className="space-y-2">
+                  <label
+                    htmlFor="context-text"
+                    className="block text-xs font-semibold text-slate-600"
+                  >
+                    補充說明（選填）
+                  </label>
+                  <textarea
+                    id="context-text"
+                    rows={2}
+                    value={contextText}
+                    onChange={(e) => setContextText(e.target.value)}
+                    disabled={inputLocked}
+                    placeholder="例如：三哥酸辣薯粉加腩肉（可留空）"
+                    className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
+                  />
+                </div>
+
+                <button
+                  type="button"
+                  disabled={!canSubmitAnalysis}
+                  onClick={handleSubmitAnalysis}
+                  className="w-full rounded-xl bg-emerald-600 py-3 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50 transition"
+                >
+                  {loading
+                    ? "分析中…"
+                    : hasResult
+                      ? "重新分析"
+                      : "開始分析"}
+                </button>
               </div>
             ) : (
               <label className="w-full h-64 border-2 border-dashed border-slate-300 rounded-xl flex flex-col items-center justify-center cursor-pointer hover:bg-slate-50 transition p-4">
@@ -328,6 +323,13 @@ export default function Home() {
               <div className="flex flex-col items-center justify-center h-full text-slate-400 space-y-2">
                 <span>📊</span>
                 <p className="text-sm">請先在左側上傳照片，AI 將分析營養成分</p>
+              </div>
+            )}
+
+            {imagePreview && !loading && !hasResult && !error && (
+              <div className="flex flex-col items-center justify-center h-full text-slate-400 space-y-2 text-center">
+                <span>✨</span>
+                <p className="text-sm">照片已就緒，請在左側按「開始分析」</p>
               </div>
             )}
 
