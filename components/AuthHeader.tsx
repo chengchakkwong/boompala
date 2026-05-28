@@ -16,6 +16,12 @@ export async function AuthHeader() {
         </Link>
 
         <div className="flex flex-wrap items-center gap-3 text-sm">
+          <Link
+            href="/changelog"
+            className="text-slate-600 hover:text-emerald-600 font-medium transition"
+          >
+            更新日誌
+          </Link>
           {user ? (
             <>
               <Link

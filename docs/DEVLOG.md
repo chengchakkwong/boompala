@@ -2,7 +2,8 @@
 
 產品決策的「為什麼」與設定筆記；**現行規格以 [PLAN-v1.md](PLAN-v1.md) 為準**，重大變更會在該文 §12 修訂紀錄留一行摘要。
 
-**驗收／發版請對照**：[RELEASE-CHECKLIST.md](./RELEASE-CHECKLIST.md)
+**驗收／發版請對照**：[RELEASE-CHECKLIST.md](./RELEASE-CHECKLIST.md)  
+**用戶更新日誌（版號 0.x）**：[CHANGELOG-POLICY.md](./CHANGELOG-POLICY.md) · App `/changelog`
 
 ---
 
