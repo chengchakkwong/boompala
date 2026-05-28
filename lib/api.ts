@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/client";
+import type { FeedbackPersonaId, UserPreferences } from "@/lib/types/meal";
 
 export function getApiBaseUrl(): string {
   return process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
@@ -106,4 +107,17 @@ export async function apiFetchForm<T>(
   }
 
   return response.json() as Promise<T>;
+}
+
+export async function fetchPreferences(): Promise<UserPreferences> {
+  return apiFetch<UserPreferences>("/api/me/preferences");
+}
+
+export async function updatePreferences(
+  feedback_persona_id: FeedbackPersonaId,
+): Promise<UserPreferences> {
+  return apiFetch<UserPreferences>("/api/me/preferences", {
+    method: "PATCH",
+    body: { feedback_persona_id },
+  });
 }

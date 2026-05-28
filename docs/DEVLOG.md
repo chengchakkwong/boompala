@@ -5,6 +5,8 @@
 **驗收／發版請對照**：[RELEASE-CHECKLIST.md](./RELEASE-CHECKLIST.md)  
 **用戶更新日誌（版號 0.x）**：[CHANGELOG-POLICY.md](./CHANGELOG-POLICY.md) · App `/changelog`
 
+> **最新**：P4.5 雙性格 feedback 規格已定（待實作）→ 本章 [§2026-05-29 — P4.5](#2026-05-29--p45-雙性格-feedback教練風格)
+
 ---
 
 ## 2026-05-26 — P0 登入：Email → Google OAuth
@@ -181,6 +183,111 @@
 - **原因**：後端已改 multipart，前端仍送 JSON（未部署／快取舊 bundle）。  
 - **處理**：重啟 dev、硬重新整理；**前後端一起部署**。
 
-### 下一步
+### 下一步（當時）
 
-- 產品：**P3**（embedding、30 天相似圖、沿用／重算）。
+- 產品：**P3**（embedding、30 天相似圖、沿用／重算）→ 見下文 **2026-05-29 已擱置**。
+
+---
+
+## 2026-05-29 — P3 相似圖：擱置決策
+
+### 決策
+
+- **P3 暫不實作、擱置**；完整規格仍保留於 [PLAN-v1.md](PLAN-v1.md) §2.5、§7，日後可再啟用。
+- **下一步產品方向**：**P4**（優先使用者可感知功能，如每日熱量加總；見 PLAN §7 P4）。
+
+### 原因
+
+| 面向 | 說明 |
+|------|------|
+| 價值 | P3 主效益為 **省 Gemini token**（相似圖命中後可沿用上次、少打 Vision），非核心流程缺口 |
+| 現況 | **P0–P2 已驗收**；登入者每次上傳仍走 analyze → P1.5 修正 → 存檔，與現行體驗一致 |
+| 規模 | 家人／小規模自用；預算粗算（約 10 張／天）下 P3 邊際效益低 |
+| 優先級 | **功能價值 > 省費優化**；先做 P4 等較有感功能較划算 |
+
+### 擱置期間行為（不變）
+
+- 首頁維持 **§6.3 P1.5 流程**（選圖 → analyze／refine → 存檔）；**不**做 `check-similar`。
+- 訪客仍跳過相似度（與 PLAN §6.2 一致）。
+- DB：`embedding` 欄位仍未加；`analysis_source`／`reused_from_meal_id` 已存在，現況皆為 `gemini_fresh`。
+
+### 何時再啟用 P3（建議觸發條件）
+
+- Gemini **月帳單或用量**明顯偏高；或
+- 使用者反覆反映「同一道菜每次都要重等 AI」；或
+- 準備擴大使用者、需主動控 API 成本。
+
+### 備註
+
+- 啟用 P3 時仍可依 P1.5 的 `upload_context_text`、對話摘要作 `prior_correction`（PLAN §2.5 不變）。
+
+---
+
+## 2026-05-29 — P4.5 雙性格 Feedback（教練風格）
+
+### 背景
+
+- 使用者反映：無論吃什麼、`cheeky_cat_comment` 都偏毒舌，缺少鼓勵，容易產生愧疚感。
+- 目標：保留原有 **嘴賤貓（`cheeky`）**，新增 **暖心教練（`supportive`）**；日後可再擴充更多 `persona_id`。
+
+### 決策
+
+| # | 項目 | 決定 |
+|---|------|------|
+| D1 | 性格 ID | `cheeky`（**預設**）、`supportive` |
+| D2 | UI | **僅首頁**（分析前）segmented 選擇；v1 不做設定頁、詳情不顯示教練名稱 |
+| D3 | 切換規則 | 若當次 session 已有分析結果（versions 非空）→ **清空** versions／conversation，提示「**已切換教練，請重新上傳／分析**」 |
+| D4 | Loading | 分析／修正／存檔中 **不可**切換性格 |
+| D5 | 訪客 | `localStorage` key：`cheekycat_feedback_persona_id` |
+| D6 | 登入偏好 | 表 **`user_preferences`**（非 `user_metadata`）；登入後 **伺服器偏好覆蓋** localStorage；改選時 `PATCH`；每次登入沿用上次設定 |
+| D7 | 歷史 | `meals.feedback_persona_id` **快照**；舊列 NULL 視為 `cheeky`；**不**依日後改偏好 retroactive 改寫舊評語 |
+| D8 | JSON 欄位名 | **保留** `cheeky_cat_comment`（語意為 AI 評語，不更名） |
+| D9 | 非法 `persona_id` | **fallback `cheeky`**（不為 MVP 回 400） |
+| D10 | 營養估算 | 兩種性格 **共用**同一套營養／JSON schema 規則；**僅** `cheeky_cat_comment` 語氣不同 |
+| D11 | Migration | `supabase/migrations/003_feedback_persona.sql`；由維護者在 **Supabase Dashboard → SQL Editor** 手動 Run |
+| D12 | 後端 repo | `C:\Users\user\Desktop\健身AppBackend`（`personalities.py` + 擴充 `main.py`） |
+| D13 | 與 P4 關係 | **並列**：P4（每日熱量加總等）仍為規格下一步；**P4.5 插隊實作**（使用者體驗優先） |
+| D14 | 用戶 changelog | 功能上線後新增 **0.7.0**（見 [CHANGELOG-POLICY.md](./CHANGELOG-POLICY.md)）；**規格階段不**改 `content/changelog.ts` |
+
+### `supportive` 人設（寫入 prompt，非通用聊天）
+
+- **像媽媽／支持型**：不責備、不製造焦慮；大餐先安慰再溫柔提醒。
+- **溫暖親切**：可用「寶貝」等稱呼；可輕微碎碎念（喝水、別只靠手搖），但須**與本餐相關**。
+- **小進步就誇**：有記錄、有蔬菜、份量合理等皆可肯定。
+- **限制**：`cheeky_cat_comment` **≤120 字**、1～3 句、繁中；**禁止捏造**圖中沒有的事（運動量、熬夜、老闆等），除非 `context_text` 有寫；熱量須誠實。
+- **不要求**「喵～」結尾。
+
+### `cheeky` 護欄（調整現有 prompt）
+
+- 保留毒舌、幽默、可「喵～」結尾。
+- **禁止**人身攻擊、飲食羞恥、連續羞辱。
+- 高熱量／炸物：**至少一句**緩和或明日可執行小建議。
+- 同樣 ≤120 字、針對**本餐**。
+
+### 技術摘要（待實作）
+
+- 後端：`build_analyze_prompt` / `build_refine_prompt` 接受 `persona_id`；`GET/PATCH /api/me/preferences`；analyze／refine／meals 帶 persona。
+- 前端：首頁 segmented、`persona_id` 進 FormData、存檔帶 `feedback_persona_id`。
+- 實作細節見 Cursor plan：`.cursor/plans/教練性格_feedback_3603e796.plan.md`（若檔名不同，以 repo 內最新 P4.5 plan 為準）。
+
+### 驗收（草案）
+
+- [ ] `supportive`：高熱量餐有安慰、無羞辱、≤120 字
+- [ ] `cheeky`：仍毒舌但有緩和／建議
+- [ ] 訪客選 `supportive` 重開分頁仍記得（localStorage）
+- [ ] 登入改偏好、重登仍保留；切換時 PATCH 成功
+- [ ] 有 v0 時切換性格 → 清空 + 提示文案；loading 時不可切
+- [ ] 存檔後 `meals.feedback_persona_id` 正確；舊列 NULL 詳情正常
+- [ ] Dashboard 已執行 migration 003
+- [ ] 上線後 `content/changelog.ts` 新增 0.7.0
+
+### 部署順序（實作時）
+
+1. Dashboard 執行 `003_feedback_persona.sql`
+2. 部署 `健身AppBackend`（Cloud Run）
+3. 部署前端（Vercel）
+
+### 狀態
+
+- **程式已實作**（前端 `健身App`、後端 `健身AppBackend`）；migration 003 已由維護者在 Dashboard 執行。
+- **待部署**：Cloud Run（後端）→ Vercel（前端）；本機可先用 `uvicorn` + `npm run dev` 驗收。

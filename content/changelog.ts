@@ -8,6 +8,16 @@ export type ChangelogEntry = {
 /** 新 → 舊；版號規則見 docs/CHANGELOG-POLICY.md */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.7.0",
+    date: "2026-05-29",
+    title: "可選教練風格",
+    highlights: [
+      "首頁可切換「嘴賤貓」或「暖心教練」，AI 評語語氣不同",
+      "登入後會記住你的選擇，換裝置也會同步",
+      "預設仍為嘴賤貓；切換教練後需重新分析目前照片",
+    ],
+  },
+  {
     version: "0.6.0",
     date: "2026-05-27",
     title: "日記可顯示餐點原圖",

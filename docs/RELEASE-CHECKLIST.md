@@ -9,13 +9,13 @@
 
 - [ ] **`docs/DEVLOG.md`**：新章節（日期 + 標題）、決策表、實作摘要、驗收結果、下一步
 - [ ] **`docs/PLAN-v1.md` §12 修訂紀錄**：一行版本摘要 + 日期（可選連 DEVLOG 章節）
-- [ ] **`docs/PLAN-v1.md` 頂部狀態列**：例如「P2 已驗收；下一步 P3」
+- [ ] **`docs/PLAN-v1.md` 頂部狀態列**：例如「P2 已驗收；下一步 P4」或「P3 已擱置」
 - [ ] **`content/changelog.ts`**：最上方新增一筆，**用戶語言** 3～5 條 highlights（版號規則見 [CHANGELOG-POLICY.md](./CHANGELOG-POLICY.md)；勿貼 DEVLOG 原文）
 
 ## 依變更類型（有改才勾）
 
 - [ ] **API／環境變數**：`健身AppBackend/.env.example`、前端 `.env.example`（若有）
-- [ ] **資料庫**：`supabase/migrations/` 新檔 + Dashboard／SQL Editor 已執行備註寫進 DEVLOG
+- [ ] **資料庫**：`supabase/migrations/` 新檔 + Dashboard／SQL Editor 已執行備註寫進 DEVLOG（P4.5：`003_feedback_persona.sql`）
 - [ ] **Storage／OAuth**：DEVLOG 寫 Step 0 設定；Redirect URL 等
 - [ ] **`README.md`**：僅在里程碑（如 P0–P3 階段驗收）改「已驗收／下一步」一句
 

@@ -1,7 +1,7 @@
-# Project CheekyCat — 產品與技術計劃書 v1.1
+# Project CheekyCat — 產品與技術計劃書 v1.2
 
-> **狀態**：**P1、P1.5、P2 已驗收**；P0 Google OAuth（見 §12、[DEVLOG.md](DEVLOG.md)）  
-> **最後更新**：2026-05-27  
+> **狀態**：**P0–P2 已驗收**（含 P1.5）；**P3 已擱置**；**P4.5 已實作、待部署驗收**；**P4**（每日熱量加總等）仍為並列下一步（見 §7）  
+> **最後更新**：2026-05-29 · P4.5 見 [DEVLOG.md](DEVLOG.md) §2026-05-29 — P4.5；P3 擱置見同檔 §2026-05-29 — P3  
 > **相關 repo**：前端 `健身App`（Vercel）｜後端 `健身AppBackend`（Cloud Run FastAPI）
 
 ---
@@ -13,7 +13,7 @@
 | 產品定位 | AI 拍照估算營養的個人健身飲食 Tracker（CheekyCat 人設） |
 | 開發初衷 | 預算有限，自建符合個人飲食／健身習慣的 Tracker（見 `README.md`） |
 | 現況 | Next.js 上傳照片 → FastAPI `/api/analyze-food` → Gemini Vision |
-| 下一階段 | 雲端記憶、多裝置、使用者隔離、相似圖輔助與可選省費 |
+| 下一階段 | **P4.5**（教練性格，插隊實作）與 **P4**（每日熱量加總等）**並列**；**P3 相似圖已擱置**（規格保留） |
 | 目標週期 | 約 **2 週**，分階段交付 |
 | 預算 | 約 **HK$100/月**（約 10 張圖／天） |
 
@@ -53,10 +53,28 @@
 | 訪客（P1.5） | 可用 **補充說明** 模式 analyze；**不可**聊天修正（UI 提示登入解鎖）；不可存檔（同 P1） |
 | 費用護欄（P1.5） | 每餐 refine 上限 **5** 輪（初版後最多再 4 次聊天）；`REFINE_MAX_ROUNDS`；僅登入可呼叫 refine |
 | `user_correction_note`（P1） | **P1.5 起 deprecated**；新存檔改存 `upload_context_text` + `conversation`。舊資料詳情仍顯示「舊版備註」 |
-| 相似圖輔助（P3） | 可帶入歷史 `upload_context_text` + 對話摘要作 `prior_correction`（見 §2.4） |
+| 相似圖輔助（P3） | 可帶入歷史 `upload_context_text` + 對話摘要作 `prior_correction`（見 §2.5） |
 | 語言 | **僅繁體中文**（暫不做英文） |
 
-### 2.4 相似圖 / Embedding（P3）
+### 2.4 教練性格 / Feedback 語氣（P4.5）
+
+> **狀態（2026-05-29）**：**規格已定、待實作**。決策原因與 prompt 要點見 [DEVLOG.md](DEVLOG.md) §2026-05-29 — P4.5。
+
+| # | 決策 |
+|---|------|
+| 性格 | `cheeky`（嘴賤貓，**預設**）、`supportive`（暖心教練） |
+| 評語欄位 | 仍用 `cheeky_cat_comment`（AI 評語；鍵名不變） |
+| UI | **僅首頁**分析前 segmented；loading／refining／saving 時不可切換 |
+| 切換 | 若已有分析版本 → **清空** session + 提示「已切換教練，請重新上傳／分析」 |
+| 訪客 | `localStorage`：`cheekycat_feedback_persona_id` |
+| 登入 | `user_preferences.feedback_persona_id`；登入後伺服器偏好覆蓋 localStorage；改選 `PATCH` |
+| 存檔 | `meals.feedback_persona_id` 快照；舊列 NULL 視為 `cheeky`；不 retroactive |
+| 營養邏輯 | 兩性格共用估算規則；僅評語 tone 不同；評語 ≤120 字 |
+| 非法 ID | fallback `cheeky` |
+
+### 2.5 相似圖 / Embedding（P3）
+
+> **狀態（2026-05-29）**：**已擱置、暫不實作**。下列為保留規格；啟用條件見 [DEVLOG.md](DEVLOG.md) §2026-05-29。
 
 | # | 決策 |
 |---|------|
@@ -67,7 +85,7 @@
 | 典型場景 | 家常菜、連鎖店（如譚仔／三哥）等 **重複外觀** 的餐點 |
 | 向量寫入時機 | 僅在使用者 **確認存檔** 後寫入 `meals` + `embedding`（避免垃圾向量） |
 
-### 2.5 技術分工
+### 2.6 技術分工
 
 | 層級 | 職責 |
 |------|------|
@@ -77,7 +95,7 @@
 
 **為何保留 FastAPI**：Gemini API key、大檔、embedding、業務邏輯不暴露前端；與既有 `健身AppBackend/main.py` 部署一致。
 
-### 2.6 階段優先級（2 週）
+### 2.7 階段優先級（2 週）
 
 | 階段 | 內容 | 時程 |
 |------|------|------|
@@ -85,8 +103,9 @@
 | **P1** | 確認後存檔、時間軸、刪除；訪客不寫庫（✅ 已驗收） | 第 1 週 |
 | **P1.5** | 上傳雙模式、聊天修正、多版本 N 選一、詳情對話／版本；訪客可補充 analyze | 第 1–2 週（約 2–3 天） |
 | **P2** | Storage 原圖、列表縮圖、刪除連動 | 第 2 週初 |
-| **P3** | embedding、30 天相似、詢問 UI、沿用／重算、prompt 輔助 | 第 2 週中 |
-| **P4**（可選） | 每日熱量加總、匯出、註冊開關（公開前） | 2 週後 |
+| **P3** | embedding、30 天相似、詢問 UI、沿用／重算、prompt 輔助 | **已擱置**（規格 §2.5、§7；見 DEVLOG） |
+| **P4.5** | 雙性格 feedback、`user_preferences`、prompt persona | **規格已定；插隊實作**（§7） |
+| **P4**（可選） | 每日熱量加總、匯出、註冊開關（公開前） | **並列下一步** |
 
 **MVP 定義（第 1 週末）**：P0 + P1（可不含 P2 原圖，列表先顯示文字營養資料）。
 
@@ -203,6 +222,7 @@ sequenceDiagram
 | `analysis_source` | `text` | `gemini_fresh` \| `reused_previous` |
 | `reused_from_meal_id` | `uuid` nullable | 沿用上次時指向來源 |
 | `image_path` | `text` nullable | P2：`{user_id}/{meal_id}.jpg` |
+| `feedback_persona_id` | `text` nullable | P4.5：存檔時快照 `cheeky` \| `supportive`；舊列 NULL 視為 `cheeky` |
 | `embedding` | `vector(n)` nullable | P3；維度依 embedding 模型（實作時定，如 768） |
 
 **頂層營養欄位（`dish_name`, `calories_kcal`, …）**：存檔時寫入 **使用者選中版本** 的快照，供列表與日後加總；完整多版本存在 `analysis_versions`。
@@ -250,12 +270,29 @@ sequenceDiagram
 - SQL 放 `supabase/migrations/002_meals_p15_interactive.sql`；Dashboard 手動執行（與 P1 相同流程）。
 - **不建立** `analysis_sessions` 表。
 
+#### 4.1.3 Migration `003_feedback_persona.sql`（P4.5）
+
+- 新增表 `user_preferences`（`user_id` PK、`feedback_persona_id` 預設 `cheeky`、RLS）。
+- `meals` 加欄 `feedback_persona_id`（nullable；CHECK `cheeky` \| `supportive`）。
+- SQL 放 `supabase/migrations/003_feedback_persona.sql`；**Dashboard → SQL Editor** 手動執行（與 P1／P1.5 相同）。
+
+### 4.2 表：`user_preferences`（P4.5）
+
+| 欄位 | 型別 | 說明 |
+|------|------|------|
+| `user_id` | `uuid` PK | `auth.users.id` |
+| `feedback_persona_id` | `text` NOT NULL DEFAULT `cheeky` | `cheeky` \| `supportive` |
+| `updated_at` | `timestamptz` | 最後更新偏好時間 |
+
+- RLS：僅本人 SELECT／INSERT／UPDATE。
+- FastAPI 以 **service role** + JWT `sub` 讀寫（與 `meals` 相同模式）；前端不直連此表。
+
 **索引建議**：
 
 - `(user_id, created_at DESC)`
 - pgvector：`embedding` + `user_id` 過濾（30 天在查詢用 `created_at >= now() - interval '30 days'`）
 
-### 4.2 RLS 政策（最小集）
+### 4.3 RLS 政策（最小集，`meals`）
 
 ```sql
 -- 僅能 CRUD 自己的 meals
@@ -267,7 +304,7 @@ CREATE POLICY "meals_delete_own" ON meals FOR DELETE USING (auth.uid() = user_id
 
 > FastAPI 使用 **service role** 或 **驗證使用者 JWT 後以 user_id 過濾** 二選一；建議 FastAPI 驗 JWT 後用 **user JWT + Supabase client**，或 service role + **強制 WHERE user_id = sub**（不可信任 client 傳入的 user_id）。
 
-### 4.3 Storage（P2）
+### 4.4 Storage（P2）
 
 - Bucket：**private**
 - 路徑：`{user_id}/{meal_id}.{ext}`
@@ -283,10 +320,12 @@ CREATE POLICY "meals_delete_own" ON meals FOR DELETE USING (auth.uid() = user_id
 
 | 方法 | 路徑 | Auth | 說明 |
 |------|------|------|------|
-| `POST` | `/api/analyze-food` | 可選 | multipart：`file` + 可選 `context_text`（Form）；回傳 v0 `NutritionalAnalysis`。訪客可用。P3 可再加 `prior_correction` |
-| `POST` | `/api/analyze-food/refine` | **必填** | P1.5：multipart `file` + `message` + `versions_json` + 可選 `upload_context_text`；回傳新分析與 `version_index`。見 §5.5 |
+| `POST` | `/api/analyze-food` | 可選 | multipart：`file` + 可選 `context_text`、`persona_id`（Form）；回傳 v0 `NutritionalAnalysis`。訪客可用。見 §5.6 |
+| `POST` | `/api/analyze-food/refine` | **必填** | P1.5：multipart + 可選 `persona_id`（須與當次 session 一致）；見 §5.5、§5.6 |
+| `GET` | `/api/me/preferences` | **必填** | P4.5：`{ "feedback_persona_id": "cheeky" }`；無列則後端 lazy insert 預設 |
+| `PATCH` | `/api/me/preferences` | **必填** | P4.5：body `{ "feedback_persona_id": "cheeky" \| "supportive" }` |
 | `POST` | `/api/meals/check-similar` | **必填** | P3：上傳圖片 → embedding → 30 天比對 |
-| `POST` | `/api/meals` | **必填** | 確認存檔：選中版營養欄位 + `chosen_version_index`, `upload_mode`, `upload_context_text`, `analysis_versions`, `conversation`；P2 multipart 含原圖 |
+| `POST` | `/api/meals` | **必填** | 確認存檔：P1.5 欄位 + **`feedback_persona_id`**（必填）；P2 multipart 含原圖 |
 | `GET` | `/api/meals` | **必填** | 時間軸 `?limit=&offset=`（列表用頂層營養快照即可） |
 | `GET` | `/api/meals/{id}` | **必填** | 詳情含 versions + conversation + `chosen_version_index`；非本人 → **404** |
 | `DELETE` | `/api/meals/{id}` | **必填** | 刪除列 + P2 刪 Storage 物件 |
@@ -364,6 +403,25 @@ FastAPI 驗證方式（實作時二選一）：
 - 現有 `POST /api/meals` 之 `MealCreate` → 擴充為含 P1.5 metadata 之 body。
 - 現有 `app/page.tsx` 之 `correctionNote` textarea → 改為模式開關 + 版本列 + 聊天區。
 
+### 5.6 P4.5：教練性格（`persona_id`）
+
+**允許值**：`cheeky` | `supportive`；缺省或非法 → **`cheeky`**。
+
+**解析順序**（`analyze`／`refine`）：
+
+1. Form `persona_id`（若為允許值）
+2. 若請求帶有效 JWT → `user_preferences.feedback_persona_id`
+3. 否則 `cheeky`
+
+**Prompt**：後端 `健身AppBackend/personalities.py`（或同等 registry）提供各 persona 的 `tone_block`；`build_analyze_prompt`／`build_refine_prompt` 注入；營養 JSON schema 與 P1.5 相同。
+
+**前端**（僅 [`app/page.tsx`](app/page.tsx)）：
+
+- Segmented：嘴賤貓｜暖心教練
+- 登入：mount 時 `GET /api/me/preferences` 覆蓋 localStorage
+- 訪客：讀寫 `cheekycat_feedback_persona_id`
+- 切換且已有 versions → 清空 + 提示「已切換教練，請重新上傳／分析」
+
 ---
 
 ## 6. 前端頁面（Next.js）
@@ -377,6 +435,8 @@ FastAPI 驗證方式（實作時二選一）：
 | `/history/[id]` | 詳情、採用版本、對話紀錄、刪除 | P1.5；P2 顯示原圖 |
 
 ### 6.1 首頁 UI 狀態機（P3：含相似圖；P1.5 分析流程見 §6.3）
+
+> **現行（P3 擱置）**：首頁依 **§6.3**，不呼叫 `check-similar`。
 
 1. 選圖  
 2. **check-similar**（loading）  
@@ -509,7 +569,9 @@ stateDiagram-v2
 
 ---
 
-### P3 — 相似圖與省費（約 3 天）
+### P3 — 相似圖與省費（約 3 天）【已擱置】
+
+> **2026-05-29**：暫不實作。主因：小規模自用下以 **省 Gemini token** 為主，非核心缺口；優先 **P4**。規格與任務保留；再啟用見 [DEVLOG.md](DEVLOG.md) §2026-05-29。
 
 **任務**
 
@@ -528,7 +590,28 @@ stateDiagram-v2
 
 ---
 
-### P4 — 未來增強（Out of 2 週）
+### P4.5 — 雙性格 Feedback（插隊實作）【已實作、待部署驗收】
+
+> 決策與 prompt 要點：[DEVLOG.md](DEVLOG.md) §2026-05-29 — P4.5。Migration：`003_feedback_persona.sql`。
+
+**任務**
+
+- [x] Dashboard 執行 migration 003
+- [x] 後端：`personalities.py`、`build_*_prompt(persona_id)`、`GET/PATCH /api/me/preferences`
+- [x] 後端：`analyze-food`／`refine`／`meals` 接 `persona_id`／`feedback_persona_id`
+- [x] 前端：首頁 segmented、FormData、`feedback_persona_id` 存檔、切換清空邏輯
+- [x] `content/changelog.ts` **0.7.0**（可選教練風格）
+
+**驗收**
+
+- [ ] 兩種性格評語風格可辨、supportive 不羞辱、cheeky 有護欄
+- [ ] 訪客 localStorage、登入偏好跨裝置
+- [ ] 切換清空 + 提示；loading 不可切
+- [ ] `meals.feedback_persona_id` 快照正確
+
+---
+
+### P4 — 未來增強（並列下一步）
 
 - 每日熱量加總、月曆
 - 資料匯出（GDPR 風格）
@@ -645,3 +728,5 @@ stateDiagram-v2
 | v1.4 | 2026-05-26 | **P1.5 規格定稿**（互動修正：雙模式、聊天多版本、詳情對話）；待實作；詳見 [DEVLOG.md](DEVLOG.md) |
 | v1.5 | 2026-05-27 | **P1.5 已驗收**：migration 002、refine API、首頁互動 session、詳情對話／版本；詳見 [DEVLOG.md](DEVLOG.md) |
 | v1.6 | 2026-05-27 | **P2 已驗收**：`meal-photos` Storage、multipart 存檔、signed URL、`/history` 顯示原圖；詳見 [DEVLOG.md](DEVLOG.md) |
+| v1.7 | 2026-05-29 | **P3 已擱置**（相似圖／embedding 暫不實作，規格保留）；**下一步 P4**；詳見 [DEVLOG.md](DEVLOG.md) §2026-05-29 |
+| v1.8 | 2026-05-29 | **P4.5 規格定稿**（雙性格 feedback、`user_preferences`、migration 003）；待實作；與 P4 並列；詳見 [DEVLOG.md](DEVLOG.md) §2026-05-29 — P4.5 |

@@ -1,3 +1,5 @@
+export type FeedbackPersonaId = "cheeky" | "supportive";
+
 export interface AnalysisResult {
   dish_name: string;
   calories_kcal: number;
@@ -39,15 +41,21 @@ export interface Meal extends AnalysisResult {
   reused_from_meal_id: string | null;
   image_path: string | null;
   image_url: string | null;
+  feedback_persona_id?: FeedbackPersonaId;
 }
 
 export type MealCreatePayload = AnalysisResult & {
   chosen_version_index: number;
   upload_mode: UploadMode;
   upload_context_text: string | null;
+  feedback_persona_id: FeedbackPersonaId;
   analysis_versions: AnalysisVersion[];
   conversation: ConversationMessage[];
 };
+
+export interface UserPreferences {
+  feedback_persona_id: FeedbackPersonaId;
+}
 
 export interface RefineResponse {
   version_index: number;

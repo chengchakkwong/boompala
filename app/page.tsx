@@ -4,7 +4,15 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { MealDetailView } from "@/components/MealDetailView";
-import { apiFetchForm, getApiBaseUrl } from "@/lib/api";
+import { apiFetchForm, fetchPreferences, getApiBaseUrl, updatePreferences } from "@/lib/api";
+import {
+  DEFAULT_PERSONA_ID,
+  PERSONA_OPTIONS,
+  PERSONA_SWITCH_NOTICE,
+  readStoredPersonaId,
+  writeStoredPersonaId,
+  type FeedbackPersonaId,
+} from "@/lib/personalities";
 import {
   analysisToVersion,
   appendAssistantMessage,
@@ -54,6 +62,10 @@ export default function Home() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [personaId, setPersonaId] = useState<FeedbackPersonaId>(DEFAULT_PERSONA_ID);
+  const [personaSwitchNotice, setPersonaSwitchNotice] = useState<string | null>(
+    null,
+  );
 
   const previewAnalysis: AnalysisResult | null =
     versions.length > 0
@@ -65,13 +77,31 @@ export default function Home() {
 
   useEffect(() => {
     const supabase = createClient();
+    const syncPersonaForSession = async (loggedIn: boolean) => {
+      if (loggedIn) {
+        try {
+          const prefs = await fetchPreferences();
+          setPersonaId(prefs.feedback_persona_id);
+          writeStoredPersonaId(prefs.feedback_persona_id);
+        } catch {
+          setPersonaId(readStoredPersonaId());
+        }
+      } else {
+        setPersonaId(readStoredPersonaId());
+      }
+    };
+
     void supabase.auth.getSession().then(({ data: { session } }) => {
-      setIsLoggedIn(!!session);
+      const loggedIn = !!session;
+      setIsLoggedIn(loggedIn);
+      void syncPersonaForSession(loggedIn);
     });
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
-      setIsLoggedIn(!!session);
+      const loggedIn = !!session;
+      setIsLoggedIn(loggedIn);
+      void syncPersonaForSession(loggedIn);
     });
     return () => subscription.unsubscribe();
   }, []);
@@ -86,11 +116,30 @@ export default function Home() {
     setSaveSuccess(false);
   }, []);
 
+  const handlePersonaChange = useCallback(
+    (next: FeedbackPersonaId) => {
+      if (next === personaId) return;
+      if (versions.length > 0) {
+        resetSession();
+        setPersonaSwitchNotice(PERSONA_SWITCH_NOTICE);
+      }
+      setPersonaId(next);
+      writeStoredPersonaId(next);
+      if (isLoggedIn) {
+        void updatePreferences(next).catch(() => {
+          /* 偏好同步失敗不阻擋本地切換 */
+        });
+      }
+    },
+    [personaId, versions.length, resetSession, isLoggedIn],
+  );
+
   const handleFoodAnalysis = async (file: File) => {
     setLoading(true);
     setError(null);
     setSaveError(null);
     setSaveSuccess(false);
+    setPersonaSwitchNotice(null);
     resetSession();
 
     const trimmedContext = contextText.trim();
@@ -99,10 +148,22 @@ export default function Home() {
     if (trimmedContext) {
       formData.append("context_text", trimmedContext);
     }
+    formData.append("persona_id", personaId);
 
     try {
+      const headers: Record<string, string> = {};
+      if (isLoggedIn) {
+        const supabase = createClient();
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        if (session?.access_token) {
+          headers.Authorization = `Bearer ${session.access_token}`;
+        }
+      }
       const response = await fetch(`${getApiBaseUrl()}/api/analyze-food`, {
         method: "POST",
+        headers,
         body: formData,
       });
 
@@ -164,6 +225,7 @@ export default function Home() {
     if (trimmedContext) {
       formData.append("upload_context_text", trimmedContext);
     }
+    formData.append("persona_id", personaId);
 
     try {
       const data = await apiFetchForm<RefineResponse>(
@@ -207,6 +269,7 @@ export default function Home() {
       upload_context_text: trimmedContext || null,
       analysis_versions: versions,
       conversation,
+      feedback_persona_id: personaId,
     };
 
     const formData = new FormData();
@@ -229,6 +292,7 @@ export default function Home() {
     contextText,
     conversation,
     currentFile,
+    personaId,
     router,
   ]);
 
@@ -249,6 +313,36 @@ export default function Home() {
         </header>
 
         <hr className="border-slate-200" />
+
+        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 space-y-3">
+          <p className="text-xs font-semibold text-slate-600">教練風格</p>
+          <div
+            className="flex rounded-xl bg-slate-100 p-1 gap-1"
+            role="group"
+            aria-label="教練風格"
+          >
+            {PERSONA_OPTIONS.map((opt) => (
+              <button
+                key={opt.id}
+                type="button"
+                disabled={inputLocked}
+                onClick={() => handlePersonaChange(opt.id)}
+                className={`flex-1 rounded-lg py-2 text-sm font-medium transition ${
+                  personaId === opt.id
+                    ? "bg-white text-emerald-700 shadow-sm"
+                    : "text-slate-600 hover:text-slate-800"
+                } disabled:opacity-50`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+          {personaSwitchNotice && (
+            <p className="text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-2">
+              {personaSwitchNotice}
+            </p>
+          )}
+        </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col min-h-[350px]">
